@@ -10,7 +10,7 @@
 [![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-Zero%202%20W-C51A4A.svg)](https://www.raspberrypi.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**Emerging Electronic Business · Wirtschaftsinformatik M.Sc. · University of Cologne**
+**Emerging Electronic Business ·  M.Sc. · University of Cologne**
 
 </div>
 
