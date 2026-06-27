@@ -1,100 +1,117 @@
 """
-vision.py — Visual medication confirmation using OpenAI Vision.
+vision.py — Visual medication intake verification.
 
-This module sends a captured image to an OpenAI vision model and asks it
-whether the user appears to have taken their medication.
+This module analyses an image captured by the Raspberry Pi camera and
+determines whether there is clear visual evidence that the user has
+just taken (or is taking) their medication.
 
-The model returns ONLY JSON, making it easy to parse programmatically.
-
-Expected output:
-
-{
-    "pill_taken": true
-}
-
-or
-
-{
-    "pill_taken": false
-}
+It is intentionally conservative:
+if the image is ambiguous, the medication is NOT confirmed.
 """
 
 import json
-import os
+from dataclasses import dataclass
 
 from openai import OpenAI
 
-from camera import Camera
+from config import Config
 
 
-class VisionVerifier:
-
-    PROMPT = """
+VISION_PROMPT = """
 You are assisting a smart medication reminder system.
 
-Look at the image and determine whether the person appears to have taken
-or is clearly taking a pill.
+Your task is ONLY to determine whether there is clear visual evidence
+that the person has just taken, or is placing, a pill into their mouth.
 
-Base your decision ONLY on what is visible.
+If the image is blurry, ambiguous, obstructed,
+or you cannot confidently determine this,
+return FALSE.
 
 Return ONLY valid JSON.
 
 {
-    "pill_taken": true
+    "pill_taken": true,
+    "confidence": 0.93
 }
 
 or
 
 {
-    "pill_taken": false
+    "pill_taken": false,
+    "confidence": 0.42
 }
 """
 
+
+@dataclass
+class VisionResult:
+    confirmed: bool
+    confidence: float
+
+
+class VisionVerifier:
+
     def __init__(self):
-        self.client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
 
-    def verify(self, image_path: str) -> bool:
-        """
-        Sends an image to OpenAI Vision.
+        self.model = Config.VISION_MODEL
+        self.client = None
 
-        Returns:
-            True  -> pill appears taken
-            False -> pill not confirmed
-        """
+        if Config.OPENAI_API_KEY:
+            self.client = OpenAI(api_key=Config.OPENAI_API_KEY)
 
-        image = Camera.encode_base64(image_path)
+    def verify(self, image_b64: str) -> VisionResult:
 
-        if image is None:
-            raise FileNotFoundError(image_path)
-
-        response = self.client.responses.create(
-            model="gpt-4.1-mini",
-            input=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": self.PROMPT
-                        },
-                        {
-                            "type": "input_image",
-                            "image_url": f"data:image/jpeg;base64,{image}"
-                        }
-                    ]
-                }
-            ]
-        )
-
-        output = response.output_text.strip()
+        if self.client is None or image_b64 is None:
+            return VisionResult(False, 0.0)
 
         try:
-            result = json.loads(output)
-            return bool(result["pill_taken"])
 
-        except Exception as e:
-            raise RuntimeError(
-                f"Could not parse LLM response:\n{output}"
-            ) from e
+            response = self.client.responses.create(
+
+                model=self.model,
+
+                input=[
+
+                    {
+                        "role": "user",
+
+                        "content": [
+
+                            {
+                                "type": "input_text",
+                                "text": VISION_PROMPT
+                            },
+
+                            {
+                                "type": "input_image",
+                                "image_url":
+                                    f"data:image/jpeg;base64,{image_b64}"
+                            }
+
+                        ]
+
+                    }
+
+                ],
+
+                temperature=0
+
+            )
+
+            raw = response.output_text.strip()
+
+            data = json.loads(raw)
+
+            return VisionResult(
+
+                confirmed=bool(data["pill_taken"]),
+
+                confidence=float(data["confidence"])
+
+            )
+
+        except Exception as exc:
+
+            print(f"[vision] {exc}")
+
+            return VisionResult(False, 0.0)
