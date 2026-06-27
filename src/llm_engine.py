@@ -41,11 +41,17 @@ class Decision:
 # ----------------------------------------------------------------------
 
 SYSTEM_PROMPT = """
-You are a smart medicine box, an empathetic medication assistant for elderly users.
+You are an empathetic medication assistant for elderly users.
 
-You receive the current medication context as JSON.
+You receive:
+1. Structured sensor data
+2. A photograph taken immediately after the medication compartment was opened.
 
-Your job is to decide ONE action.
+Use BOTH sources of information to decide the most appropriate action.
+
+If an image is provided:
+- Determine whether there is clear visual evidence that the user has just taken or is placing a pill into their mouth.
+- If the image is ambiguous or unclear, do NOT assume the medication has been taken.
 
 Return ONLY valid JSON.
 
@@ -57,7 +63,6 @@ Return ONLY valid JSON.
 }
 
 Allowed actions:
-
 - remind
 - confirm_taken
 - warn_double
@@ -65,13 +70,10 @@ Allowed actions:
 - idle
 
 Guidelines:
-
 - Keep messages under 30 words.
 - Be supportive and reassuring.
 - Never recommend medical decisions.
-- Never change medication schedules.
-- If vision_confirmed is false,
-  medication should NOT be confirmed.
+- Never modify medication schedules.
 """
 
 
@@ -95,76 +97,111 @@ class LLMEngine:
 
     # ------------------------------------------------------------------
 
-    def reason(self, context: dict) -> Decision:
-        """
-        Decide what SmartMedBox should do.
+    def reason(
+    self,
+    context: dict,
+    image_b64: str | None = None,
+) -> Decision:
+    """
+    Decide what SmartMedBox should do.
 
-        Context example:
+    Parameters
+    ----------
+    context:
+        Structured sensor context.
 
-        {
-            "open_count": 1,
-            "minutes_overdue": 10,
-            "vision_confirmed": False,
-            "vision_confidence": 0.73
-        }
-        """
+    image_b64:
+        Base64-encoded image captured after the compartment
+        was opened. Can be None if no image was taken.
 
-        if self.client is None:
-            return self._rule_based_fallback(context)
+    Example context:
 
-        try:
+    {
+        "compartment": 1,
+        "scheduled": True,
+        "open_count": 1,
+        "minutes_overdue": 5
+    }
+    """
 
-            response = self.client.responses.create(
+    if self.client is None:
+        return self._rule_based_fallback(context)
 
-                model=self.model,
+    try:
 
-                input=[
-                    {
-                        "role": "system",
-                        "content": SYSTEM_PROMPT,
-                    },
-                    {
-                        "role": "user",
-                        "content": json.dumps(context),
-                    },
-                ],
+        # ----------------------------------------------------------
+        # Build multimodal user content
+        # ----------------------------------------------------------
 
-                temperature=0.3,
+        user_content = [
+
+            {
+                "type": "input_text",
+                "text": (
+                    "Current SmartMedBox context:\n\n"
+                    + json.dumps(context, indent=2)
+                ),
+            }
+
+        ]
+
+        if image_b64 is not None:
+
+            user_content.append(
+
+                {
+                    "type": "input_image",
+                    "image_url": f"data:image/jpeg;base64,{image_b64}",
+                }
 
             )
 
-            return self._parse(response.output_text)
+        # ----------------------------------------------------------
+        # Call GPT
+        # ----------------------------------------------------------
 
-        except Exception as exc:
+        response = self.client.responses.create(
 
-            logger.exception("LLM reasoning failed.")
+            model=self.model,
 
-            return self._rule_based_fallback(context)
+            input=[
 
-    # ------------------------------------------------------------------
+                {
+                    "role": "system",
 
-    def _parse(self, raw: str) -> Decision:
+                    "content": [
 
-        raw = (
-            raw.replace("```json", "")
-               .replace("```", "")
-               .strip()
+                        {
+                            "type": "input_text",
+
+                            "text": SYSTEM_PROMPT,
+
+                        }
+
+                    ],
+
+                },
+
+                {
+                    "role": "user",
+
+                    "content": user_content,
+
+                },
+
+            ],
+
+            temperature=0.2,
+
         )
 
-        data = json.loads(raw)
+        return self._parse(response.output_text)
 
-        return Decision(
+    except Exception:
 
-            action=data.get("action", "idle"),
+        logger.exception("LLM reasoning failed.")
 
-            message=data.get("message", ""),
-
-            confidence=float(data.get("confidence", 0.5)),
-
-            notify_caregiver=bool(
-                data.get("notify_caregiver", False)
-            ),
-        )
+        return self._rule_based_fallback(context)
 
     # ------------------------------------------------------------------
 
