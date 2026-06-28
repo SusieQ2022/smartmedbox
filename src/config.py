@@ -18,8 +18,9 @@ class Config:
 
     # ── LLM / OpenAI ──
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o")
-    VISION_MODEL: str = os.getenv("VISION_MODEL", "gpt-4o")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "")
+    VISION_MODEL: str = os.getenv("VISION_MODEL", "")
+    KICONNECT_API_KEY : str = os.getenv("KICONNECT_API_KEY", "")
 
     # ── Caregiver notification (optional) ──
     CAREGIVER_PHONE: str = os.getenv("CAREGIVER_PHONE", "")

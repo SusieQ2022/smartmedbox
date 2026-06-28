@@ -11,9 +11,15 @@ Run:
 
     python tests/test_llm_engine.py
 """
+import sys
+from pathlib import Path
 
-from camera import Camera
-from llm_engine import LLMEngine
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.camera import Camera
+from src.llm_engine import LLMEngine
+import base64
 
 
 def print_separator():
@@ -27,9 +33,10 @@ def main():
     # Load sample image
     # ---------------------------------------------------------
 
-    image_path = "assets/sample_intake.jpg"
-
-    image_b64 = Camera.encode_base64(image_path)
+    image_path = "assets/sample_intake.jpeg"
+    
+    with open(image_path, "rb") as f:
+        image_b64 = base64.b64encode(f.read()).decode("utf-8")
 
     if image_b64 is None:
 

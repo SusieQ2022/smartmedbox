@@ -15,7 +15,7 @@ import os
 import time
 from typing import Optional
 
-from config import Config
+from src.config import Config
 
 
 class Camera:

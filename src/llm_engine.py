@@ -18,8 +18,12 @@ This module ONLY reasons over the resulting context.
 import json
 import logging
 from dataclasses import dataclass
+from typing import Any
 
-from config import Config
+from .config import Config
+from typing import cast
+from openai.types.responses import ResponseInputParam
+from openai.types.chat import ChatCompletionContentPartParam
 
 logger = logging.getLogger(__name__)
 
@@ -52,14 +56,15 @@ Use BOTH sources of information to decide the most appropriate action.
 If an image is provided:
 - Determine whether there is clear visual evidence that the user has just taken or is placing a pill into their mouth.
 - If the image is ambiguous or unclear, do NOT assume the medication has been taken.
+- Message shall be a response that you communicate through to the user. It should be supportive and reassuring.
 
 Return ONLY valid JSON.
 
 {
     "action": "...",
     "message": "...",
-    "confidence": 0.95,
-    "notify_caregiver": false
+    "confidence": confidence level (0.0-1.0),
+    "notify_caregiver": true/false
 }
 
 Allowed actions:
@@ -71,7 +76,6 @@ Allowed actions:
 
 Guidelines:
 - Keep messages under 30 words.
-- Be supportive and reassuring.
 - Never recommend medical decisions.
 - Never modify medication schedules.
 """
@@ -88,11 +92,12 @@ class LLMEngine:
         self.model = Config.LLM_MODEL
         self.client = None
 
-        if Config.OPENAI_API_KEY:
+        if Config.KICONNECT_API_KEY:
             from openai import OpenAI
 
             self.client = OpenAI(
-                api_key=Config.OPENAI_API_KEY
+                api_key=Config.KICONNECT_API_KEY,
+                base_url="https://chat.kiconnect.nrw/api/v1",
             )
 
     # ------------------------------------------------------------------
@@ -101,107 +106,126 @@ class LLMEngine:
     self,
     context: dict,
     image_b64: str | None = None,
-) -> Decision:
-    """
-    Decide what SmartMedBox should do.
+    ) -> Decision:
+        """
+        Decide what SmartMedBox should do.
 
-    Parameters
-    ----------
-    context:
-        Structured sensor context.
+        Parameters
+        ----------
+        context:
+            Structured sensor context.
 
-    image_b64:
-        Base64-encoded image captured after the compartment
-        was opened. Can be None if no image was taken.
+        image_b64:
+            Base64-encoded image captured after the compartment
+            was opened. Can be None if no image was taken.
 
-    Example context:
+        Example context:
 
-    {
-        "compartment": 1,
-        "scheduled": True,
-        "open_count": 1,
-        "minutes_overdue": 5
-    }
-    """
+        {
+            "compartment": 1,
+            "scheduled": True,
+            "open_count": 1,
+            "minutes_overdue": 5
+        }
+        """
 
-    if self.client is None:
-        return self._rule_based_fallback(context)
+        if self.client is None:
+            return self._rule_based_fallback(context)
 
-    try:
+        try:
 
-        # ----------------------------------------------------------
-        # Build multimodal user content
-        # ----------------------------------------------------------
+            # ----------------------------------------------------------
+            # Build multimodal user content
+            # ----------------------------------------------------------
 
-        user_content = [
-
-            {
-                "type": "input_text",
-                "text": (
-                    "Current SmartMedBox context:\n\n"
-                    + json.dumps(context, indent=2)
-                ),
-            }
-
-        ]
-
-        if image_b64 is not None:
-
-            user_content.append(
-
+            user_content: list[ChatCompletionContentPartParam] =  [
                 {
-                    "type": "input_image",
-                    "image_url": f"data:image/jpeg;base64,{image_b64}",
+                    "type": "text",
+                    "text": (
+                        "Current SmartMedBox context:\n\n"
+                        + json.dumps(context, indent=2)
+                    ),
                 }
+            ]
 
+            if image_b64 is not None:
+                user_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_b64}"
+                        },
+                    }
+                )
+
+            # ----------------------------------------------------------
+            # Call GPT
+            # ----------------------------------------------------------
+            print(f"Model: {self.model!r}")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": SYSTEM_PROMPT,
+                    },
+                    {
+                        "role": "user",
+                        "content": user_content
+                    },
+                ],
+                temperature=0.2,
             )
+            content = response.choices[0].message.content
+            assert content is not None
 
-        # ----------------------------------------------------------
-        # Call GPT
-        # ----------------------------------------------------------
+            print("===== LLM OUTPUT =====")
+            print(repr(content))
+            print("======================")
 
-        response = self.client.responses.create(
+            return self._parse(content)
 
-            model=self.model,
+        except Exception:
 
-            input=[
+            logger.exception("LLM reasoning failed.")
 
-                {
-                    "role": "system",
+            return self._rule_based_fallback(context)
 
-                    "content": [
+    # ------------------------------------------------------------------
 
-                        {
-                            "type": "input_text",
+    def _parse(self, output_text: str) -> Decision:
+        """
+        Parse the LLM response into a Decision.
+        Supports both plain JSON and Markdown-wrapped JSON.
+        """
 
-                            "text": SYSTEM_PROMPT,
+        output_text = output_text.strip()
 
-                        }
+        # Remove Markdown code fences if present
+        if output_text.startswith("```"):
+            lines = output_text.splitlines()
 
-                    ],
+            # Remove opening ``` or ```json
+            lines = lines[1:]
 
-                },
+            # Remove closing ```
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
 
-                {
-                    "role": "user",
+            output_text = "\n".join(lines).strip()
 
-                    "content": user_content,
+        try:
+            payload = json.loads(output_text)
+        except json.JSONDecodeError:
+            logger.exception("Failed to parse LLM output:\n%s", output_text)
+            raise
 
-                },
-
-            ],
-
-            temperature=0.2,
-
+        return Decision(
+            action=payload.get("action", "idle"),
+            message=payload.get("message", ""),
+            confidence=float(payload.get("confidence", 1.0)),
+            notify_caregiver=bool(payload.get("notify_caregiver", False)),
         )
-
-        return self._parse(response.output_text)
-
-    except Exception:
-
-        logger.exception("LLM reasoning failed.")
-
-        return self._rule_based_fallback(context)
 
     # ------------------------------------------------------------------
 
@@ -333,3 +357,5 @@ class LLMEngine:
             confidence=1.0,
 
         )
+        
+
