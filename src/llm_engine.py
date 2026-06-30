@@ -18,12 +18,11 @@ This module ONLY reasons over the resulting context.
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any
 
-from .config import Config
-from typing import cast
-from openai.types.responses import ResponseInputParam
-from openai.types.chat import ChatCompletionContentPartParam
+try:
+    from .config import Config
+except ImportError:  # Allows importing as a script-level module in src/.
+    from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +96,7 @@ class LLMEngine:
 
             self.client = OpenAI(
                 api_key=Config.KICONNECT_API_KEY,
-                base_url="https://chat.kiconnect.nrw/api/v1",
+                base_url=Config.KICONNECT_BASE_URL,
             )
 
     # ------------------------------------------------------------------
@@ -138,7 +137,7 @@ class LLMEngine:
             # Build multimodal user content
             # ----------------------------------------------------------
 
-            user_content: list[ChatCompletionContentPartParam] =  [
+            user_content: list[dict] =  [
                 {
                     "type": "text",
                     "text": (
@@ -240,10 +239,9 @@ class LLMEngine:
 
         overdue = context.get("minutes_overdue", 0)
 
-        vision_confirmed = context.get(
-            "vision_confirmed",
-            False,
-        )
+        vision_confirmed = context.get("vision_confirmed", False)
+        if not vision_confirmed:
+            vision_confirmed = context.get("is_empty", False)
 
         # --------------------------------------------------------------
 

@@ -35,6 +35,8 @@ from camera import Camera
 from llm_engine import LLMEngine, Decision
 from voice import Voice
 from notifier import Notifier
+from store import AdherenceStore
+from scheduler import ReminderScheduler
 
 
 class SmartMedBox:
@@ -53,6 +55,8 @@ class SmartMedBox:
         self.llm = LLMEngine()
         self.voice = Voice()
         self.notifier = Notifier()
+        self.store = AdherenceStore()
+        self.scheduler = ReminderScheduler(self.sensors)
 
     # ------------------------------------------------------------------
     # Sense → Reason → Act
@@ -127,6 +131,28 @@ class SmartMedBox:
         if decision.notify_caregiver:
 
             self.notifier.alert(decision.message)
+
+        if decision.action == "confirm_taken":
+
+            state.taken_today = True
+
+        self.store.log_event(
+
+            compartment=compartment,
+
+            action=decision.action,
+
+            message=decision.message,
+
+            label=state.label,
+
+            scheduled_hour=state.scheduled_hour,
+
+            notified=decision.notify_caregiver,
+
+            minutes_overdue=minutes_overdue,
+
+        )
 
         return decision
 
@@ -268,6 +294,16 @@ class SmartMedBox:
         while True:
 
             self.sensors.poll()
+
+            for event in self.scheduler.due_events():
+
+                self.process_medication_event(
+
+                    event.compartment,
+
+                    minutes_overdue=event.minutes_overdue,
+
+                )
 
             time.sleep(2)
 
