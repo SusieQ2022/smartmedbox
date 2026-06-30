@@ -223,7 +223,7 @@ def _render_event_row(event: Dict) -> str:
 class DashboardHandler(BaseHTTPRequestHandler):
     """HTTP handler that renders the dashboard from the configured store."""
 
-    store_path = Config.SMARTMEDBOX_DB
+    store_path = Config.DB_PATH
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
@@ -232,7 +232,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         store = AdherenceStore(self.store_path)
-        html = render_dashboard(store.summary_today(), store.recent_events())
+        html = render_dashboard(store.summary_today(), store.events_today())
         body = html.encode("utf-8")
 
         self.send_response(200)
@@ -245,7 +245,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         return None
 
 
-def run_dashboard(host: str = "127.0.0.1", port: int = 8000, db_path: str = Config.SMARTMEDBOX_DB) -> None:
+def run_dashboard(host: str = "127.0.0.1", port: int = 8000, db_path: str = Config.DB_PATH) -> None:
     DashboardHandler.store_path = db_path
     server = ThreadingHTTPServer((host, port), DashboardHandler)
     print(f"SmartMedBox caregiver dashboard: http://{host}:{port}")
@@ -256,7 +256,7 @@ def main() -> None:
     parser = ArgumentParser(description="Run the SmartMedBox caregiver dashboard.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--db", default=Config.SMARTMEDBOX_DB)
+    parser.add_argument("--db", default=Config.DB_PATH)
     args = parser.parse_args()
 
     run_dashboard(host=args.host, port=args.port, db_path=args.db)

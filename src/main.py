@@ -93,6 +93,8 @@ class SmartMedBox:
 
             "open_count": state.open_count,
 
+            "is_empty": state.is_empty,
+
             "minutes_overdue": minutes_overdue,
 
         }
@@ -167,6 +169,7 @@ class SmartMedBox:
         Commands:
 
             open <n>
+            take <n>
             double <n>
             overdue <n>
             refill <n>
@@ -179,6 +182,7 @@ class SmartMedBox:
 
         print("Commands:")
         print("  open <n>      Open compartment n")
+        print("  take <n>      Simulate removing/taking dose n")
         print("  double <n>    Open compartment n twice")
         print("  overdue <n>   Simulate 35-minute overdue medication")
         print("  refill <n>    Reset compartment")
@@ -207,7 +211,7 @@ class SmartMedBox:
 
             if len(cmd) != 2 or not cmd[1].isdigit():
 
-                print("Usage: open|double|overdue|refill <compartment>")
+                print("Usage: open|take|double|overdue|refill <compartment>")
 
                 continue
 
@@ -224,6 +228,12 @@ class SmartMedBox:
             if cmd[0] == "open":
 
                 self.sensors.simulate_open(compartment)
+
+                decision = self.process_medication_event(compartment)
+
+            elif cmd[0] == "take":
+
+                self.sensors.simulate_pill_removed(compartment)
 
                 decision = self.process_medication_event(compartment)
 

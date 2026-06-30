@@ -11,11 +11,17 @@ image. The image is only needed transiently for intake verification.
 
 import os
 import sqlite3
+from contextlib import closing
 from datetime import date, datetime
 from typing import Dict, List, Optional
 
+try:
+    from .config import Config
+except ImportError:
+    from config import Config
 
-DEFAULT_DB_PATH = os.getenv("SMARTMEDBOX_DB", "smartmedbox.db")
+
+DEFAULT_DB_PATH = Config.DB_PATH
 
 
 class AdherenceStore:
@@ -31,7 +37,7 @@ class AdherenceStore:
         return conn
 
     def _setup(self) -> None:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS events (
@@ -47,6 +53,7 @@ class AdherenceStore:
                 )
                 """
             )
+            conn.commit()
 
     def log_event(
         self,
@@ -59,7 +66,7 @@ class AdherenceStore:
         minutes_overdue: int = 0,
     ) -> None:
         """Record one Sense -> Reason -> Act cycle."""
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 """
                 INSERT INTO events
@@ -78,10 +85,11 @@ class AdherenceStore:
                     minutes_overdue,
                 ),
             )
+            conn.commit()
 
     def recent_events(self, limit: int = 50) -> List[Dict]:
         """Return the most recent events, newest first."""
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             rows = conn.execute(
                 "SELECT * FROM events ORDER BY id DESC LIMIT ?",
                 (limit,),
@@ -91,7 +99,7 @@ class AdherenceStore:
     def events_today(self) -> List[Dict]:
         """Return today's events, oldest first."""
         today = date.today().isoformat()
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             rows = conn.execute(
                 "SELECT * FROM events WHERE ts LIKE ? ORDER BY id ASC",
                 (f"{today}%",),
