@@ -35,6 +35,8 @@ from camera import Camera
 from llm_engine import LLMEngine, Decision
 from voice import Voice
 from notifier import Notifier
+from store import AdherenceStore
+from scheduler import ReminderScheduler
 
 
 class SmartMedBox:
@@ -53,6 +55,8 @@ class SmartMedBox:
         self.llm = LLMEngine()
         self.voice = Voice()
         self.notifier = Notifier()
+        self.store = AdherenceStore()
+        self.scheduler = ReminderScheduler(self.sensors)
 
     # ------------------------------------------------------------------
     # Sense → Reason → Act
@@ -88,6 +92,8 @@ class SmartMedBox:
             "scheduled": True,
 
             "open_count": state.open_count,
+
+            "is_empty": state.is_empty,
 
             "minutes_overdue": minutes_overdue,
 
@@ -128,6 +134,28 @@ class SmartMedBox:
 
             self.notifier.alert(decision.message)
 
+        if decision.action == "confirm_taken":
+
+            state.taken_today = True
+
+        self.store.log_event(
+
+            compartment=compartment,
+
+            action=decision.action,
+
+            message=decision.message,
+
+            label=state.label,
+
+            scheduled_hour=state.scheduled_hour,
+
+            notified=decision.notify_caregiver,
+
+            minutes_overdue=minutes_overdue,
+
+        )
+
         return decision
 
     # ------------------------------------------------------------------
@@ -141,6 +169,7 @@ class SmartMedBox:
         Commands:
 
             open <n>
+            take <n>
             double <n>
             overdue <n>
             refill <n>
@@ -153,6 +182,7 @@ class SmartMedBox:
 
         print("Commands:")
         print("  open <n>      Open compartment n")
+        print("  take <n>      Simulate removing/taking dose n")
         print("  double <n>    Open compartment n twice")
         print("  overdue <n>   Simulate 35-minute overdue medication")
         print("  refill <n>    Reset compartment")
@@ -181,7 +211,7 @@ class SmartMedBox:
 
             if len(cmd) != 2 or not cmd[1].isdigit():
 
-                print("Usage: open|double|overdue|refill <compartment>")
+                print("Usage: open|take|double|overdue|refill <compartment>")
 
                 continue
 
@@ -198,6 +228,12 @@ class SmartMedBox:
             if cmd[0] == "open":
 
                 self.sensors.simulate_open(compartment)
+
+                decision = self.process_medication_event(compartment)
+
+            elif cmd[0] == "take":
+
+                self.sensors.simulate_pill_removed(compartment)
 
                 decision = self.process_medication_event(compartment)
 
@@ -268,6 +304,16 @@ class SmartMedBox:
         while True:
 
             self.sensors.poll()
+
+            for event in self.scheduler.due_events():
+
+                self.process_medication_event(
+
+                    event.compartment,
+
+                    minutes_overdue=event.minutes_overdue,
+
+                )
 
             time.sleep(2)
 

@@ -124,6 +124,11 @@ class SensorArray:
 
     # ── Mock helpers (used by the simulator / tests only) ──
 
+    def simulate_open(self, index: int) -> None:
+        """Pretend the user opened a compartment lid."""
+        if index in self.compartments:
+            self.compartments[index].open_count += 1
+
     def simulate_pill_removed(self, index: int) -> None:
         """Pretend the user removed the dose from a compartment."""
         if index in self.compartments:
