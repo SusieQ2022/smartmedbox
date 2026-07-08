@@ -1,12 +1,13 @@
 """
-notifier.py — Caregiver notification (part of the ACT stage).
+notifier.py - caregiver notification for the ACT stage.
 
-Sends an SMS alert to a registered caregiver when the system detects a missed
-dose or a possible double-dose. Uses Twilio in real mode; in mock mode it logs
-the notification to the console so the flow can be tested without credentials.
+Uses Twilio in real mode and console output in mock mode.
 """
 
-from config import Config
+try:
+    from .config import Config
+except ImportError:
+    from config import Config
 
 
 class Notifier:
@@ -17,8 +18,11 @@ class Notifier:
         self._client = None
         if not self.mock:
             from twilio.rest import Client
-            self._client = Client(Config.TWILIO_ACCOUNT_SID,
-                                  Config.TWILIO_AUTH_TOKEN)
+
+            self._client = Client(
+                Config.TWILIO_ACCOUNT_SID,
+                Config.TWILIO_AUTH_TOKEN,
+            )
 
     def alert(self, message: str) -> None:
         """Send a caregiver alert with the given message."""
@@ -26,7 +30,7 @@ class Notifier:
             print("[notifier] No caregiver phone configured; skipping alert.")
             return
         if self.mock:
-            print(f"📲 [Caregiver alert -> {Config.CAREGIVER_PHONE}]: {message}")
+            print(f"[Caregiver alert -> {Config.CAREGIVER_PHONE}]: {message}")
             return
         self._client.messages.create(
             body=f"SmartMedBox: {message}",

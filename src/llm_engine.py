@@ -1,167 +1,359 @@
 """
-llm_engine.py — LLM reasoning core (the REASON stage).
+llm_engine.py — LLM reasoning core (REASON stage).
 
-This is the "brain" of SmartMedBox. It takes the current sensor state and,
-where relevant, a confirmation image, and decides what the system should do:
-remind the user, confirm intake, warn about a possible double-dose, or alert
-a caregiver. It also generates the natural-language message that the voice
-module will speak.
+This module is the reasoning engine of SmartMedBox.
 
-If no API key is configured, it falls back to a deterministic rule-based stub
-so the application still runs end-to-end during development.
+It receives structured context from the sensing layer:
+    - Reed switch (compartment opened)
+    - Vision verification
+    - Reminder timing
+    - Number of compartment openings
+
+and decides the single best action for the system.
+
+Vision analysis is performed in vision.py.
+This module ONLY reasons over the resulting context.
 """
 
 import json
+import logging
 from dataclasses import dataclass
-from typing import Optional
 
-from config import Config
+try:
+    from .config import Config
+except ImportError:  # Allows importing as a script-level module in src/.
+    from config import Config
 
+logger = logging.getLogger(__name__)
+
+
+# ----------------------------------------------------------------------
+# Decision returned by the reasoning engine
+# ----------------------------------------------------------------------
 
 @dataclass
 class Decision:
-    """The structured output of the reasoning step."""
-    action: str          # one of: remind | confirm_taken | warn_double | alert_caregiver | idle
-    message: str         # natural-language text to speak to the user
-    confidence: float    # 0.0–1.0
+    action: str
+    message: str
+    confidence: float
     notify_caregiver: bool = False
 
 
-# System prompt that defines the assistant's role and required output format.
-SYSTEM_PROMPT = """You are SmartMedBox, an empathetic medication assistant for
-elderly and chronic patients. Given the current state of a pill box, decide the
-single most appropriate action and craft a short, warm, spoken message.
+# ----------------------------------------------------------------------
+# System Prompt
+# ----------------------------------------------------------------------
 
-Always respond with ONLY a JSON object of the form:
-{"action": "...", "message": "...", "confidence": 0.0, "notify_caregiver": false}
+SYSTEM_PROMPT = """
+You are an empathetic medication assistant for elderly users.
 
-Valid actions: remind, confirm_taken, warn_double, alert_caregiver, idle.
-Keep the message under 30 words, conversational, and never clinical or alarming.
+You receive:
+1. Structured sensor data
+2. A photograph taken immediately after the medication compartment was opened.
+
+Use BOTH sources of information to decide the most appropriate action.
+
+If an image is provided:
+- Determine whether there is clear visual evidence that the user has just taken or is placing a pill into their mouth.
+- If the image is ambiguous or unclear, do NOT assume the medication has been taken.
+- Message shall be a response that you communicate through to the user. It should be supportive and reassuring.
+
+Return ONLY valid JSON.
+
+{
+    "action": "...",
+    "message": "...",
+    "confidence": confidence level (0.0-1.0),
+    "notify_caregiver": true/false
+}
+
+Allowed actions:
+- remind
+- confirm_taken
+- warn_double
+- alert_caregiver
+- idle
+
+Guidelines:
+- Keep messages under 30 words.
+- Never recommend medical decisions.
+- Never modify medication schedules.
 """
 
 
+# ----------------------------------------------------------------------
+# LLM Engine
+# ----------------------------------------------------------------------
+
 class LLMEngine:
-    """Wraps the OpenAI client and exposes high-level reasoning methods."""
 
     def __init__(self):
+
         self.model = Config.LLM_MODEL
-        self.vision_model = Config.VISION_MODEL
-        self._client = None
-        if Config.OPENAI_API_KEY:
+        self.client = None
+
+        if Config.KICONNECT_API_KEY:
             from openai import OpenAI
-            self._client = OpenAI(api_key=Config.OPENAI_API_KEY)
 
-    # ── Public API ──
+            self.client = OpenAI(
+                api_key=Config.KICONNECT_API_KEY,
+                base_url=Config.KICONNECT_BASE_URL,
+            )
 
-    def reason(self, context: dict) -> Decision:
+    # ------------------------------------------------------------------
+
+    def reason(
+    self,
+    context: dict,
+    image_b64: str | None = None,
+    ) -> Decision:
         """
-        Decide what to do given the current context.
+        Decide what SmartMedBox should do.
 
-        `context` typically contains: compartment index, whether it is empty,
-        how many times it was opened, the scheduled time, and elapsed minutes.
+        Parameters
+        ----------
+        context:
+            Structured sensor context.
+
+        image_b64:
+            Base64-encoded image captured after the compartment
+            was opened. Can be None if no image was taken.
+
+        Example context:
+
+        {
+            "compartment": 1,
+            "scheduled": True,
+            "open_count": 1,
+            "minutes_overdue": 5
+        }
         """
-        if self._client is None:
+
+        if self.client is None:
             return self._rule_based_fallback(context)
 
         try:
-            response = self._client.chat.completions.create(
+
+            # ----------------------------------------------------------
+            # Build multimodal user content
+            # ----------------------------------------------------------
+
+            user_content: list[dict] =  [
+                {
+                    "type": "text",
+                    "text": (
+                        "Current SmartMedBox context:\n\n"
+                        + json.dumps(context, indent=2)
+                    ),
+                }
+            ]
+
+            if image_b64 is not None:
+                user_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_b64}"
+                        },
+                    }
+                )
+
+            # ----------------------------------------------------------
+            # Call GPT
+            # ----------------------------------------------------------
+            print(f"Model: {self.model!r}")
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": json.dumps(context)},
+                    {
+                        "role": "system",
+                        "content": SYSTEM_PROMPT,
+                    },
+                    {
+                        "role": "user",
+                        "content": user_content
+                    },
                 ],
-                temperature=0.4,
-                max_tokens=150,
+                temperature=0.2,
             )
-            raw = response.choices[0].message.content.strip()
-            return self._parse(raw)
-        except Exception as exc:  # network / API failure — stay functional
-            print(f"[llm] API error, using fallback: {exc}")
+            content = response.choices[0].message.content
+            assert content is not None
+
+            print("===== LLM OUTPUT =====")
+            print(repr(content))
+            print("======================")
+
+            return self._parse(content)
+
+        except Exception:
+
+            logger.exception("LLM reasoning failed.")
+
             return self._rule_based_fallback(context)
 
-    def confirm_intake(self, image_b64: Optional[str]) -> bool:
-        """
-        Use the vision model to confirm the pill was actually taken.
+    # ------------------------------------------------------------------
 
-        Returns True if intake is visually confirmed. Falls back to True in
-        mock/dev mode so the demo flow completes.
+    def _parse(self, output_text: str) -> Decision:
         """
-        if self._client is None or image_b64 is None:
-            return True  # development fallback
+        Parse the LLM response into a Decision.
+        Supports both plain JSON and Markdown-wrapped JSON.
+        """
+
+        output_text = output_text.strip()
+
+        # Remove Markdown code fences if present
+        if output_text.startswith("```"):
+            lines = output_text.splitlines()
+
+            # Remove opening ``` or ```json
+            lines = lines[1:]
+
+            # Remove closing ```
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+
+            output_text = "\n".join(lines).strip()
 
         try:
-            response = self._client.chat.completions.create(
-                model=self.vision_model,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text":
-                            "Has the person taken their medication? "
-                            "Answer strictly 'yes' or 'no'."},
-                        {"type": "image_url", "image_url":
-                            {"url": f"data:image/jpeg;base64,{image_b64}"}},
-                    ],
-                }],
-                max_tokens=5,
-            )
-            answer = response.choices[0].message.content.strip().lower()
-            return answer.startswith("yes")
-        except Exception as exc:
-            print(f"[llm] vision error, assuming confirmed: {exc}")
-            return True
+            payload = json.loads(output_text)
+        except json.JSONDecodeError:
+            logger.exception("Failed to parse LLM output:\n%s", output_text)
+            raise
 
-    # ── Internal helpers ──
-
-    def _parse(self, raw: str) -> Decision:
-        """Parse the JSON returned by the model into a Decision."""
-        # Strip code fences if the model added them.
-        raw = raw.replace("```json", "").replace("```", "").strip()
-        data = json.loads(raw)
         return Decision(
-            action=data.get("action", "idle"),
-            message=data.get("message", ""),
-            confidence=float(data.get("confidence", 0.5)),
-            notify_caregiver=bool(data.get("notify_caregiver", False)),
+            action=payload.get("action", "idle"),
+            message=payload.get("message", ""),
+            confidence=float(payload.get("confidence", 1.0)),
+            notify_caregiver=bool(payload.get("notify_caregiver", False)),
         )
+
+    # ------------------------------------------------------------------
 
     def _rule_based_fallback(self, context: dict) -> Decision:
         """
-        Deterministic logic used when no LLM is available.
+        Runs when the API is unavailable.
 
-        Keeps the system fully functional offline and serves as a clear,
-        readable specification of the intended behaviour.
+        Keeps SmartMedBox fully functional offline.
         """
+
         opened = context.get("open_count", 0)
-        is_empty = context.get("is_empty", False)
+
         overdue = context.get("minutes_overdue", 0)
 
+        vision_confirmed = context.get("vision_confirmed", False)
+        if not vision_confirmed:
+            vision_confirmed = context.get("is_empty", False)
+
+        # --------------------------------------------------------------
+
+        # Possible double dose
+
         if opened >= 2:
+
             return Decision(
+
                 action="warn_double",
-                message="It looks like this compartment was opened twice. "
-                        "Did you already take your pill? Let's make sure first.",
-                confidence=0.9,
+
+                message=(
+                    "This compartment has already been opened. "
+                    "Let's make sure you haven't already taken "
+                    "your medication."
+                ),
+
+                confidence=0.95,
+
                 notify_caregiver=True,
+
             )
-        if is_empty:
+
+        # --------------------------------------------------------------
+
+        # Medication confirmed
+
+        if opened >= 1 and vision_confirmed:
+
             return Decision(
+
                 action="confirm_taken",
-                message="Great — that's your dose taken. Have a lovely day!",
-                confidence=0.85,
+
+                message=(
+                    "Great! I've confirmed your medication intake. "
+                    "Have a wonderful day!"
+                ),
+
+                confidence=0.95,
+
             )
-        if overdue >= 30:
+
+        # --------------------------------------------------------------
+
+        # Compartment opened but intake NOT confirmed
+
+        if opened >= 1 and not vision_confirmed:
+
             return Decision(
-                action="alert_caregiver",
-                message="You still haven't taken your medication. "
-                        "I'll let your family know so they can check in.",
-                confidence=0.8,
-                notify_caregiver=True,
-            )
-        if overdue > 0:
-            return Decision(
+
                 action="remind",
-                message="Just a gentle reminder — it's time for your "
-                        "medication. Shall I remind you again shortly?",
-                confidence=0.8,
+
+                message=(
+                    "I couldn't confirm your medication yet. "
+                    "Please hold the pill near your mouth "
+                    "so I can verify it."
+                ),
+
+                confidence=0.80,
+
             )
-        return Decision(action="idle", message="", confidence=1.0)
+
+        # --------------------------------------------------------------
+
+        # Medication overdue
+
+        if overdue >= 30:
+
+            return Decision(
+
+                action="alert_caregiver",
+
+                message=(
+                    "Your medication is still overdue. "
+                    "I'll notify your caregiver "
+                    "so they can check in."
+                ),
+
+                confidence=0.90,
+
+                notify_caregiver=True,
+
+            )
+
+        # --------------------------------------------------------------
+
+        # Gentle reminder
+
+        if overdue > 0:
+
+            return Decision(
+
+                action="remind",
+
+                message=(
+                    "It's time to take your medication."
+                ),
+
+                confidence=0.80,
+
+            )
+
+        # --------------------------------------------------------------
+
+        return Decision(
+
+            action="idle",
+
+            message="",
+
+            confidence=1.0,
+
+        )
+        
+

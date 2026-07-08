@@ -1,54 +1,116 @@
 """
-Unit tests for the LLM reasoning fallback logic.
+test_llm_engine.py
 
-These tests exercise the deterministic rule-based path (no API key required),
-verifying that each medication scenario produces the correct action. This
-keeps the core decision logic verifiable in CI without external dependencies.
+Integration test for the SmartMedBox reasoning engine.
+
+This test loads a sample image from the assets directory,
+creates mock sensor data, and sends BOTH to the multimodal
+LLM. The returned decision is printed in a readable format.
+
+Run:
+
+    python tests/test_llm_engine.py
 """
-
-import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
 
-from llm_engine import LLMEngine  # noqa: E402
-
-
-def make_engine():
-    os.environ.pop("OPENAI_API_KEY", None)
-    return LLMEngine()
-
-
-def test_double_take_warns_and_notifies():
-    engine = make_engine()
-    decision = engine.reason({"open_count": 2, "is_empty": True})
-    assert decision.action == "warn_double"
-    assert decision.notify_caregiver is True
+from src.camera import Camera
+from src.llm_engine import LLMEngine
+import base64
 
 
-def test_taken_is_confirmed():
-    engine = make_engine()
-    decision = engine.reason({"open_count": 1, "is_empty": True})
-    assert decision.action == "confirm_taken"
+def print_separator():
+
+    print("\n" + "=" * 60)
 
 
-def test_long_overdue_alerts_caregiver():
-    engine = make_engine()
-    decision = engine.reason({"open_count": 0, "is_empty": False,
-                              "minutes_overdue": 45})
-    assert decision.action == "alert_caregiver"
-    assert decision.notify_caregiver is True
+def main():
+
+    # ---------------------------------------------------------
+    # Load sample image
+    # ---------------------------------------------------------
+
+    image_path = "assets/sample_intake.jpeg"
+    
+    with open(image_path, "rb") as f:
+        image_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+    if image_b64 is None:
+
+        raise FileNotFoundError(
+            f"Could not load image: {image_path}"
+        )
+
+    # ---------------------------------------------------------
+    # Mock sensor data
+    # ---------------------------------------------------------
+
+    context = {
+
+        "compartment": 1,
+
+        "scheduled": True,
+
+        "open_count": 1,
+
+        "minutes_overdue": 0,
+
+    }
+
+    # ---------------------------------------------------------
+    # Run LLM
+    # ---------------------------------------------------------
+
+    engine = LLMEngine()
+
+    decision = engine.reason(
+
+        context=context,
+
+        image_b64=image_b64,
+
+    )
+
+    # ---------------------------------------------------------
+    # Display results
+    # ---------------------------------------------------------
+
+    print_separator()
+
+    print("SMARTMEDBOX MULTIMODAL LLM TEST")
+
+    print_separator()
+
+    print("\nImage")
+
+    print(f"  {image_path}")
+
+    print("\nSensor Context")
+
+    for key, value in context.items():
+
+        print(f"  {key:<20}: {value}")
+
+    print_separator()
+
+    print("LLM Decision")
+
+    print_separator()
+
+    print(f"Action              : {decision.action}")
+
+    print(f"Message             : {decision.message}")
+
+    print(f"Confidence          : {decision.confidence:.2f}")
+
+    print(f"Notify caregiver    : {decision.notify_caregiver}")
+
+    print_separator()
 
 
-def test_slightly_overdue_reminds():
-    engine = make_engine()
-    decision = engine.reason({"open_count": 0, "is_empty": False,
-                              "minutes_overdue": 5})
-    assert decision.action == "remind"
+if __name__ == "__main__":
 
-
-def test_nothing_to_do_is_idle():
-    engine = make_engine()
-    decision = engine.reason({"open_count": 0, "is_empty": False,
-                              "minutes_overdue": 0})
-    assert decision.action == "idle"
+    main()

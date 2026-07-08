@@ -1,12 +1,14 @@
 """
-voice.py — Text-to-speech output (part of the ACT stage).
+voice.py - text-to-speech output for the ACT stage.
 
-Speaks the LLM-generated message aloud through the box's speaker. Uses the
-offline pyttsx3 engine by default (works without internet); in mock mode it
-simply prints the spoken text to the console for development.
+In mock mode this prints the spoken message. In real mode it uses the offline
+pyttsx3 engine so the box can speak through its speaker.
 """
 
-from config import Config
+try:
+    from .config import Config
+except ImportError:
+    from config import Config
 
 
 class Voice:
@@ -19,18 +21,18 @@ class Voice:
             self._init_engine()
 
     def _init_engine(self) -> None:
-        """Initialise the offline TTS engine (real mode only)."""
         import pyttsx3
+
         self._engine = pyttsx3.init()
-        self._engine.setProperty("rate", 150)   # slower, clearer for elderly users
+        self._engine.setProperty("rate", 150)
         self._engine.setProperty("volume", 1.0)
 
     def speak(self, text: str) -> None:
-        """Speak the given text aloud (or print it in mock mode)."""
+        """Speak the given text aloud, or print it in mock mode."""
         if not text:
             return
         if self.mock:
-            print(f"🔊 [SmartMedBox says]: {text}")
+            print(f"[SmartMedBox says]: {text}")
             return
         self._engine.say(text)
         self._engine.runAndWait()

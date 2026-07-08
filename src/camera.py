@@ -15,7 +15,10 @@ import os
 import time
 from typing import Optional
 
-from config import Config
+try:
+    from .config import Config
+except ImportError:  # Allows `python src/main.py` during demos.
+    from config import Config
 
 
 class Camera:
@@ -48,7 +51,7 @@ class Camera:
         """
         if self.mock:
             # Return a placeholder shipped in assets/ for development.
-            return os.path.join("assets", "sample_confirmation.jpg")
+            return os.path.join("assets", "sample_intake.jpeg")
 
         os.makedirs(save_dir, exist_ok=True)
         path = os.path.join(save_dir, f"confirm_{int(time.time())}.jpg")

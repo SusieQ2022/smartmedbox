@@ -7,7 +7,13 @@ and avoids scattering os.getenv() calls everywhere.
 """
 
 import os
-from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv() -> None:
+        """Allow mock mode to run before optional dependencies are installed."""
+        return None
 
 # Load variables from a .env file in the project root, if present.
 load_dotenv()
@@ -20,6 +26,11 @@ class Config:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o")
     VISION_MODEL: str = os.getenv("VISION_MODEL", "gpt-4o")
+    KICONNECT_API_KEY: str = os.getenv("KICONNECT_API_KEY", "")
+    KICONNECT_BASE_URL: str = os.getenv(
+        "KICONNECT_BASE_URL",
+        "https://chat.kiconnect.nrw/api/v1",
+    )
 
     # ── Caregiver notification (optional) ──
     CAREGIVER_PHONE: str = os.getenv("CAREGIVER_PHONE", "")
@@ -31,6 +42,8 @@ class Config:
     NUM_COMPARTMENTS: int = int(os.getenv("NUM_COMPARTMENTS", "4"))
     LANGUAGE: str = os.getenv("LANGUAGE", "en")
     REMINDER_INTERVAL_MIN: int = int(os.getenv("REMINDER_INTERVAL_MIN", "15"))
+    DB_PATH: str = os.getenv("SMARTMEDBOX_DB", "smartmedbox.db")
+    SMARTMEDBOX_DB: str = DB_PATH
 
     # ── Hardware mode ──
     # 'real'  -> use Raspberry Pi GPIO / camera
@@ -45,6 +58,6 @@ class Config:
     @classmethod
     def validate(cls) -> None:
         """Warn early if critical configuration is missing."""
-        if not cls.OPENAI_API_KEY:
-            print("[config] WARNING: OPENAI_API_KEY is not set. "
+        if not (cls.KICONNECT_API_KEY or cls.OPENAI_API_KEY):
+            print("[config] WARNING: no LLM API key is set. "
                   "LLM reasoning will fall back to a rule-based stub.")
