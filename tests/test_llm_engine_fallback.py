@@ -15,9 +15,9 @@ from llm_engine import LLMEngine  # noqa: E402
 
 
 def make_engine():
-    os.environ.pop("OPENAI_API_KEY", None)
-    os.environ.pop("KICONNECT_API_KEY", None)
-    return LLMEngine()
+    engine = LLMEngine()
+    engine.client = None   # Force the deterministic rule-based path
+    return engine
 
 
 def test_double_take_warns_and_notifies():
