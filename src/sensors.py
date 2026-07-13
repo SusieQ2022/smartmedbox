@@ -7,9 +7,7 @@ simulates readings so the full application can be developed and demonstrated
 on a laptop without any hardware attached.
 """
 
-import random
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict
 
 from config import Config
@@ -19,17 +17,12 @@ from config import Config
 class CompartmentState:
     """Represents the current state of a single pill compartment."""
     index: int
-    weight_g: float
-    baseline_g: float
     open_count: int = 0
+    last_processed_open_count: int = 0
     label: str = ""            # e.g. "Morning", "Noon", "Evening", "Night"
     scheduled_hour: int = 8    # hour of day (0-23) this dose should be taken
     taken_today: bool = False  # whether this dose was already taken today
 
-    @property
-    def is_empty(self) -> bool:
-        """A compartment is 'empty' when its weight drops well below baseline."""
-        return self.weight_g < (self.baseline_g * 0.4)
 
 
 class SensorArray:
@@ -64,42 +57,58 @@ class SensorArray:
             # Baseline ~5g represents a typical full daily dose of pills.
             self.compartments[i] = CompartmentState(
                 index=i,
-                weight_g=5.0,
-                baseline_g=5.0,
                 label=label,
                 scheduled_hour=hour,
             )
 
     def _init_hardware(self) -> None:
-        """Initialise real GPIO + HX711 hardware (Raspberry Pi only)."""
-        # Imported lazily so the module still imports on a laptop.
-        import RPi.GPIO as GPIO  # noqa: F401
-        from hx711 import HX711  # noqa: F401
+        """Initialise Raspberry Pi GPIO and reed switch."""
 
+        import RPi.GPIO as GPIO
         GPIO.setmode(GPIO.BCM)
-        # NOTE: pin assignments are documented in hardware/WIRING.md
-        self._hx = {}  # would hold one HX711 instance per compartment
-        # Real initialisation omitted here for brevity; see WIRING.md.
 
-    def read_weight(self, index: int) -> float:
-        """Read the current weight (grams) of a given compartment."""
-        if self.mock:
-            # Simulate small sensor noise around the stored value.
-            state = self.compartments[index]
-            return max(0.0, state.weight_g + random.uniform(-0.05, 0.05))
-        # Real mode: read from the corresponding HX711 amplifier.
-        # return self._hx[index].get_weight_mean()
-        raise NotImplementedError("Real HX711 read configured per-device.")
+        self._gpio = GPIO
 
-    def poll(self) -> Dict[int, CompartmentState]:
+        # Single reed switch connected to GPIO17
+        self._reed_pin = 17
+
+        GPIO.setup(
+            self._reed_pin,
+            GPIO.IN,
+            pull_up_down=GPIO.PUD_UP,
+        )
+
+        GPIO.add_event_detect(
+            self._reed_pin,
+            GPIO.FALLING,
+            callback=self._reed_callback,
+            bouncetime=300,
+        )
+
+
+    def _reed_callback(self, channel: int) -> None:
+        """Called whenever the reed switch is triggered."""
+        self.compartments[0].open_count += 1
+    
+    def poll(self) -> list[int]:
         """
-        Read all compartments and return their current state.
+        Poll the reed switches and return compartments that have been
+        opened since the previous poll.
 
-        This is the main method the application loop calls each cycle.
+        Returns
+        -------
+        list[int]
+            Indices of compartments with a newly detected opening event.
         """
-        for i, state in self.compartments.items():
-            state.weight_g = self.read_weight(i)
-        return self.compartments
+        opened = []
+        for index, state in self.compartments.items():
+            # Detect a NEW opening event
+            if state.open_count > state.last_processed_open_count:
+                opened.append(index)
+                # Mark this opening as processed
+                state.last_processed_open_count = state.open_count
+
+        return opened
 
     def minutes_overdue(self, index: int, now=None) -> int:
         """
@@ -132,24 +141,10 @@ class SensorArray:
     def simulate_pill_removed(self, index: int) -> None:
         """Pretend the user removed the dose from a compartment."""
         if index in self.compartments:
-            self.compartments[index].weight_g = 0.2
             self.compartments[index].open_count += 1
 
     def simulate_refill(self, index: int) -> None:
         """Reset a compartment back to a full dose."""
         if index in self.compartments:
-            self.compartments[index].weight_g = 5.0
             self.compartments[index].open_count = 0
 
-
-if __name__ == "__main__":
-    # Quick manual smoke-test of the sensor layer in mock mode.
-    arr = SensorArray()
-    print("Initial state:")
-    for idx, st in arr.poll().items():
-        print(f"  Compartment {idx}: {st.weight_g:.2f}g  empty={st.is_empty}")
-
-    print("\nSimulating pill removal from compartment 0...")
-    arr.simulate_pill_removed(0)
-    for idx, st in arr.poll().items():
-        print(f"  Compartment {idx}: {st.weight_g:.2f}g  empty={st.is_empty}")
