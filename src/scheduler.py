@@ -26,7 +26,7 @@ class ScheduleEvent:
     compartment: int
     label: str
     minutes_overdue: int
-    escalation: str  # due | remind | alert
+    escalation: str  # due | remind | alert caregiver
 
 
 class ReminderScheduler:
@@ -43,6 +43,7 @@ class ReminderScheduler:
         self.alert_after_min = alert_after_min
         self._last_reminded: Dict[Tuple[date, int], datetime] = {}
         self._alerted: Set[Tuple[date, int]] = set()
+        self._completed: Set[Tuple[date, int]] = set()
 
     def due_events(self, now: Optional[datetime] = None) -> List[ScheduleEvent]:
         """
@@ -63,10 +64,12 @@ class ReminderScheduler:
                 continue
 
             key = (today, index)
+            if key in self._completed:
+                continue
             escalation = self._escalation_for(key, minutes_overdue, now)
             if escalation is None:
                 continue
-
+            
             events.append(
                 ScheduleEvent(
                     compartment=index,
@@ -76,27 +79,68 @@ class ReminderScheduler:
                 )
             )
 
-            if escalation == "alert":
+            if escalation == "alert_caregiver":
                 self._alerted.add(key)
             self._last_reminded[key] = now
 
         return events
 
     def _escalation_for(
-        self,
-        key: Tuple[date, int],
-        minutes_overdue: int,
-        now: datetime,
-    ) -> Optional[str]:
-        if minutes_overdue >= self.alert_after_min and key not in self._alerted:
-            return "alert"
+    self,
+    key: Tuple[date, int],
+    minutes_overdue: int,
+    now: datetime,
+) -> Optional[str]:
+        """
+        Determine the escalation level for a scheduled dose.
+
+        Escalation levels:
+
+        due
+            Initial reminder when the medication first becomes due.
+
+        remind
+            Repeated reminder every reminder_interval_min minutes.
+
+        alert_caregiver
+            Medication has been overdue for alert_after_min minutes.
+            Trigger caregiver notification once.
+        """
+        # Highest escalation: caregiver alert
+        if (
+            minutes_overdue >= self.alert_after_min
+            and key not in self._alerted
+        ):
+            return "alert_caregiver"
 
         last_reminded = self._last_reminded.get(key)
-        if last_reminded is None:
-            return "due" if minutes_overdue < self.reminder_interval_min else "remind"
 
+        # First reminder
+        if last_reminded is None:
+            return "due"
+
+        # Subsequent reminders
         elapsed = (now - last_reminded).total_seconds() / 60
+
         if elapsed >= self.reminder_interval_min:
             return "remind"
 
         return None
+    
+    def mark_completed(
+    self,
+    compartment: int,
+    when: Optional[datetime] = None,
+) -> None:
+        """
+        Mark today's scheduled dose as completed.
+
+        No more reminders will be generated for this
+        compartment until the next scheduled day.
+        """
+
+        when = when or datetime.now()
+        key = (when.date(), compartment)
+        self._completed.add(key)
+        self._last_reminded.pop(key, None)
+        self._alerted.discard(key)

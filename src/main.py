@@ -114,7 +114,7 @@ class SmartMedBox:
         # REASON
         # --------------------------------------------------------------
 
-        decision = self.llm.reason(
+        decision = self.llm.generate_reminder(
 
             context=context,
 

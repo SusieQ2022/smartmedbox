@@ -29,14 +29,52 @@ def test_due_event_generated_after_scheduled_time():
 
 
 def test_due_event_is_throttled_until_interval_passes():
+
     sensors = make_sensors()
-    scheduler = ReminderScheduler(sensors, reminder_interval_min=15)
+
+    scheduler = ReminderScheduler(
+        sensors,
+        reminder_interval_min=15,
+    )
 
     first = datetime(2026, 6, 30, 8, 5)
-    assert scheduler.due_events(now=first)
 
-    assert scheduler.due_events(now=first + timedelta(minutes=10)) == []
+    events = scheduler.due_events(now=first)
 
+    assert events[0].escalation == "due"
+
+    # No reminder yet
+    assert scheduler.due_events(
+        now=first + timedelta(minutes=10)
+    ) == []
+
+    # Reminder after interval
+    events = scheduler.due_events(
+        now=first + timedelta(minutes=15)
+    )
+
+    assert len(events) == 1
+    assert events[0].escalation == "remind"
+
+def test_multiple_reminders_are_generated_every_interval():
+    sensors = make_sensors()
+    scheduler = ReminderScheduler(
+        sensors,
+        reminder_interval_min=5,
+    )
+    scheduler.due_events(
+
+        now=datetime(2026, 6, 30, 8, 0)
+    )
+    events = scheduler.due_events(
+
+        now=datetime(2026, 6, 30, 8, 5)
+    )
+    assert events[0].escalation == "remind"
+    events = scheduler.due_events(
+        now=datetime(2026, 6, 30, 8, 10)
+    )
+    assert events[0].escalation == "remind"
 
 def test_alert_generated_once_after_threshold():
     sensors = make_sensors()
@@ -45,7 +83,7 @@ def test_alert_generated_once_after_threshold():
     first_alert = scheduler.due_events(now=datetime(2026, 6, 30, 8, 35))
     second_alert = scheduler.due_events(now=datetime(2026, 6, 30, 8, 36))
 
-    assert first_alert[0].escalation == "alert"
+    assert first_alert[0].escalation == "alert_caregiver"
     assert second_alert == []
 
 
