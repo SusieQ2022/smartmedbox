@@ -19,8 +19,6 @@ class CompartmentState:
     index: int
     open_count: int = 0
     last_processed_open_count: int = 0
-    label: str = ""            # e.g. "Morning", "Noon", "Evening", "Night"
-    scheduled_hour: int = 8    # hour of day (0-23) this dose should be taken
     taken_today: bool = False  # whether this dose was already taken today
 
 
@@ -33,7 +31,7 @@ class SensorArray:
     switches. In mock mode it generates plausible fake readings.
     """
 
-    def __init__(self, num_compartments: int = None):
+    def __init__(self, num_compartments: int | None = None):
         self.num_compartments = num_compartments or Config.NUM_COMPARTMENTS
         self.mock = Config.is_mock()
         self.compartments: Dict[int, CompartmentState] = {}
@@ -43,23 +41,10 @@ class SensorArray:
             self._init_hardware()
 
     def _init_compartments(self) -> None:
-        """Set up each compartment with a baseline weight and a daily schedule."""
-        # Default daily medication schedule: one dose per time-of-day slot.
-        # (label, scheduled_hour) — extended/truncated to fit num_compartments.
-        schedule = [
-            ("Morning", 8),    # 08:00
-            ("Noon", 12),      # 12:00
-            ("Evening", 18),   # 18:00
-            ("Night", 22),     # 22:00
-        ]
-        for i in range(self.num_compartments):
-            label, hour = schedule[i % len(schedule)]
-            # Baseline ~5g represents a typical full daily dose of pills.
-            self.compartments[i] = CompartmentState(
-                index=i,
-                label=label,
-                scheduled_hour=hour,
-            )
+        """Create one hardware state object per compartment."""
+
+        for index in range(self.num_compartments):
+            self.compartments[index] = CompartmentState(index=index)
 
     def _init_hardware(self) -> None:
         """Initialise Raspberry Pi GPIO and reed switch."""
@@ -110,26 +95,6 @@ class SensorArray:
 
         return opened
 
-    def minutes_overdue(self, index: int, now=None) -> int:
-        """
-        Calculate how many minutes overdue a compartment's dose is.
-        Compares the current time against the compartment's scheduled hour.
-        Returns 0 if the dose is not yet due or has already been taken today.
-        """
-        from datetime import datetime
-
-        state = self.compartments[index]
-        if state.taken_today:
-            return 0
-
-        now = now or datetime.now()
-        # Scheduled time today, at the compartment's scheduled hour (on the hour).
-        scheduled = now.replace(
-            hour=state.scheduled_hour, minute=0, second=0, microsecond=0
-        )
-        delta_minutes = int((now - scheduled).total_seconds() / 60)
-        # Only positive values count as "overdue"; negative means not due yet.
-        return max(0, delta_minutes)
 
     # ── Mock helpers (used by the simulator / tests only) ──
 
