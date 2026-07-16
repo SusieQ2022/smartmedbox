@@ -1,13 +1,19 @@
 """
-simulator.py — Automated end-to-end demo for SmartMedBox.
+simulator.py — Automated demo for SmartMedBox (new scheduler + vision architecture).
 
-Plays through a realistic "day in the life" medication scenario, triggering
-each core behaviour of the system in sequence so the full Sense → Reason → Act
-loop can be demonstrated hands-free. Ideal for the live demo: no need to type
-commands one by one.
+Plays through a scripted medication scenario hands-free, for the live demo:
 
-Run with:
+  1. Dose becomes due          → friendly reminder
+  2. Still not taken           → repeated reminder
+  3. Overdue > 30 min          → caregiver alert
+  4. Intake verification       → confirmed / not confirmed (vision)
 
+The reminder line runs in deterministic rule-based mode so the escalation
+messages are stable and predictable. The vision line tries the live LLM and
+falls back to a simulated result if the model is unavailable, so the demo
+never breaks.
+
+Run:
     python src/simulator.py
 """
 
@@ -15,76 +21,112 @@ from __future__ import annotations
 
 import time
 
-from main import SmartMedBox
+try:
+    from .llm_engine import LLMEngine, ReasoningResult
+except ImportError:
+    from llm_engine import LLMEngine, ReasoningResult
 
 
-# Seconds to pause between scenes so the audience can read each result.
 PAUSE = 2.0
 
 
-def _print_decision(scene: str, decision) -> None:
-    """Pretty-print the outcome of one scenario."""
-    print("\n" + "=" * 60)
-    print(f" SCENE: {scene}")
-    print("=" * 60)
-    print(f"Action     : {decision.action}")
-    print(f"Message    : {decision.message}")
-    print(f"Confidence : {decision.confidence:.2f}")
-    print(f"Caregiver  : {decision.notify_caregiver}")
-    print("=" * 60)
+def _print(title: str, context: dict, result) -> None:
+    print("\n" + "=" * 62)
+    print(f" SCENE: {title}")
+    print("=" * 62)
+    print(" Context:")
+    for k, v in context.items():
+        print(f"   {k:<16}: {v}")
+    print(" Response:")
+    print(f"   Message            : {result.message}")
+    print(f"   Visually confirmed : {result.visually_confirmed}")
+    print(f"   Confidence         : {result.confidence:.2f}")
+    if result.explanation:
+        print(f"   Explanation        : {result.explanation}")
+    print("=" * 62)
 
 
-def run_demo(deterministic: bool = True) -> None:
+def run_demo(use_live_vision: bool = True) -> None:
     """
-    Run the full automated demo scenario.
+    Run the full automated demo.
 
-    When `deterministic` is True, the demo forces the rule-based reasoning
-    path so that safety-critical behaviours (double-take warning, caregiver
-    alert) are shown reliably and predictably, independent of live LLM
-    variability. Set to False to demo the live LLM instead.
+    Parameters
+    ----------
+    use_live_vision:
+        If True, the intake-verification scenes call the live LLM vision model.
+        If it is unavailable, they fall back to a simulated result so the demo
+        still completes.
     """
-    box = SmartMedBox()
+    engine = LLMEngine()
 
-    if deterministic:
-        # Force the deterministic rule-based path for a predictable demo.
-        box.llm.client = None
+    print("\n" + "#" * 62)
+    print("#  SmartMedBox — Automated Demo")
+    print("#  Scheduler drives escalation · LLM generates the message")
+    print("#" * 62)
 
-    print("\n" + "#" * 60)
-    print("#  SmartMedBox — Automated Daily Demo")
-    print("#  A day in the life of an elderly patient")
-    print("#" * 60)
+    # ── Reminder line: force deterministic messages ──
+    reminder_engine = LLMEngine()
+    reminder_engine.client = None  # rule-based, stable output
 
-    # ── Scene 1: Morning dose taken on time ──
-    # Patient opens compartment 0 and takes the morning pill.
-    box.sensors.simulate_pill_removed(0)
-    decision = box.process_medication_event(0)
-    _print_decision("08:00 — Morning dose taken on time", decision)
-    time.sleep(PAUSE)
+    reminder_scenes = [
+        ("08:00 — Dose becomes due",
+         {"escalation": "due", "compartment": 1, "label": "Vitamin D", "minutes_overdue": 0}),
+        ("08:15 — Still not taken, gentle reminder",
+         {"escalation": "remind", "compartment": 1, "label": "Vitamin D", "minutes_overdue": 15}),
+        ("08:35 — Overdue, caregiver alerted",
+         {"escalation": "alert_caregiver", "compartment": 1, "label": "Vitamin D", "minutes_overdue": 35}),
+    ]
 
-    # ── Scene 2: Noon dose missed — gentle reminder ──
-    # Compartment 1 not opened yet, and it is slightly overdue.
-    decision = box.process_medication_event(1, minutes_overdue=10)
-    _print_decision("12:10 — Noon dose overdue, gentle reminder", decision)
-    time.sleep(PAUSE)
+    for title, ctx in reminder_scenes:
+        result = reminder_engine.generate_reminder(context=ctx)
+        _print(title, ctx, result)
+        time.sleep(PAUSE)
 
-    # ── Scene 3: Noon dose still missed — caregiver alerted ──
-    # Same compartment, now well past the threshold.
-    decision = box.process_medication_event(1, minutes_overdue=35)
-    _print_decision("12:35 — Still not taken, caregiver alerted", decision)
-    time.sleep(PAUSE)
+    # ── Vision line: intake verification ──
+    _run_vision(engine, use_live_vision)
 
-    # ── Scene 4: Evening dose — accidental double-take ──
-    # Patient opens compartment 2 twice, risking a double dose.
-    box.sensors.simulate_open(2)
-    box.sensors.simulate_open(2)
-    decision = box.process_medication_event(2)
-    _print_decision("18:00 — Evening dose opened twice, double-take warning",
-                    decision)
-    time.sleep(PAUSE)
+    print("\n" + "#" * 62)
+    print("#  Demo complete.")
+    print("#" * 62 + "\n")
 
-    print("\n" + "#" * 60)
-    print("#  Demo complete — all core behaviours shown.")
-    print("#" * 60 + "\n")
+
+def _run_vision(engine: LLMEngine, use_live: bool) -> None:
+    """Demonstrate intake verification for a 'taken' and a 'not taken' image."""
+    import base64
+    from pathlib import Path
+
+    project_root = Path(__file__).resolve().parents[1]
+    cases = [
+        ("Intake verification — pill taken", "sample_intake.jpeg", True),
+        ("Intake verification — pill NOT taken", "sample_not_intake.jpeg", False),
+    ]
+
+    for title, filename, simulated_confirmed in cases:
+        ctx = {"compartment": 1, "open_count": 1, "label": "Vitamin D"}
+        image_path = project_root / "assets" / filename
+
+        result = None
+        if use_live and engine.client is not None and image_path.exists():
+            try:
+                with open(image_path, "rb") as f:
+                    image_b64 = base64.b64encode(f.read()).decode("utf-8")
+                result = engine.verify_intake(context=ctx, image_b64=image_b64)
+            except Exception as exc:
+                print(f"[vision] live call failed, using simulated result: {exc}")
+
+        # Fallback: simulated vision result so the demo never breaks.
+        if result is None:
+            result = ReasoningResult(
+                message=("Great, I've confirmed you took your medication!"
+                         if simulated_confirmed
+                         else "I couldn't confirm your medication. Please try again."),
+                visually_confirmed=simulated_confirmed,
+                confidence=0.95,
+                explanation="Simulated vision result (demo fallback).",
+            )
+
+        _print(title, ctx, result)
+        time.sleep(PAUSE)
 
 
 if __name__ == "__main__":
