@@ -112,10 +112,19 @@ class SmartMedBox:
     """
         state = self.sensors.compartments[compartment]
         medication = self.scheduler.medication_for(compartment) 
+        
+        # Ask the user to present the pill
+        self.voice.speak(
+            "Please hold the pill near your mouth. I will check in five seconds."
+        )
+
+        # Give the user time to take the pill out
+        time.sleep(5)
+    
         # ----------------------------------------------------------
         # Capture image
         # ----------------------------------------------------------
-
+        
         image_path = self.camera.capture()
         image_b64 = Camera.encode_base64(image_path)
 
