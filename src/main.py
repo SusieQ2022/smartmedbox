@@ -32,11 +32,12 @@ import time
 from config import Config
 from sensors import SensorArray
 from camera import Camera
-from llm_engine import LLMEngine, Decision
+from llm_engine import LLMEngine, ReasoningResult
 from voice import Voice
 from notifier import Notifier
 from store import AdherenceStore
-from scheduler import ReminderScheduler
+from scheduler import ReminderScheduler, ScheduleEvent
+from datetime import date, datetime
 
 
 class SmartMedBox:
@@ -62,102 +63,127 @@ class SmartMedBox:
     # Sense → Reason → Act
     # ------------------------------------------------------------------
 
-    def process_medication_event(
-        self,
-        compartment: int,
-        minutes_overdue: int = 0,
-    ) -> Decision:
+    def process_scheduler_event(self, event: ScheduleEvent) -> None:
         """
-        Execute one complete embodied AI cycle.
-
-        Parameters
-        ----------
-        compartment:
-            Medication compartment number.
-
-        minutes_overdue:
-            Minutes since the scheduled medication time.
+        Handle a scheduled medication reminder.
         """
-
-        state = self.sensors.compartments[compartment]
-
-        # --------------------------------------------------------------
-        # SENSE
-        # --------------------------------------------------------------
 
         context = {
-
-            "compartment": compartment,
-
-            "scheduled": True,
-
-            "open_count": state.open_count,
-
-            "is_empty": state.is_empty,
-
-            "minutes_overdue": minutes_overdue,
-
+            "label": event.label,
+            "minutes_overdue": event.minutes_overdue,
+            "escalation": event.escalation,
         }
 
-        image_b64 = None
+        result = self.llm.generate_reminder(context)
 
-        # Capture an image only after the compartment
-        # has been opened.
+        self.voice.speak(result.message or "")
 
-        if state.open_count > 0:
+        if event.escalation == "alert_caregiver":
+            self.notifier.alert(result.message or "")
 
-            image_path = self.camera.capture()
-
-            image_b64 = Camera.encode_base64(image_path)
-
-        # --------------------------------------------------------------
-        # REASON
-        # --------------------------------------------------------------
-
-        decision = self.llm.reason(
-
-            context=context,
-
-            image_b64=image_b64,
-
-        )
-
-        # --------------------------------------------------------------
-        # ACT
-        # --------------------------------------------------------------
-
-        if decision.message:
-
-            self.voice.speak(decision.message)
-
-        if decision.notify_caregiver:
-
-            self.notifier.alert(decision.message)
-
-        if decision.action == "confirm_taken":
-
-            state.taken_today = True
+        medication = self.scheduler.medication_for(event.compartment, event.scheduled_hour)
 
         self.store.log_event(
-
-            compartment=compartment,
-
-            action=decision.action,
-
-            message=decision.message,
-
-            label=state.label,
-
-            scheduled_hour=state.scheduled_hour,
-
-            notified=decision.notify_caregiver,
-
-            minutes_overdue=minutes_overdue,
-
+            compartment=event.compartment,
+            action=event.escalation,
+            message=result.message or "",
+            label=medication.label,
+            scheduled_hour=medication.scheduled_hour,
+            notified=(event.escalation == "alert_caregiver"),
+            minutes_overdue=event.minutes_overdue,
         )
 
-        return decision
+    def process_compartment_open(
+        self,
+        compartment: int,
+    ) -> None:
+        """
+        Handle a user opening a medication compartment.
+        Workflow:
+            Reed switch
+                ↓
+            Capture image
+                ↓
+            Verify intake with LLM
+                ↓
+            Mark dose completed (if confirmed)
+                ↓
+            Log event
+    """
+        state = self.sensors.compartments[compartment]
+        medication = self.scheduler.medication_for(compartment) 
+        # ----------------------------------------------------------
+        # Capture image
+        # ----------------------------------------------------------
 
+        image_path = self.camera.capture()
+        image_b64 = Camera.encode_base64(image_path)
+
+        if image_b64 is None:
+            print("[camera] Failed to capture image.")
+            return
+
+        # ----------------------------------------------------------
+        # Vision verification
+        # ----------------------------------------------------------
+
+        context = {
+            "compartment": compartment,
+            "label": medication.label,
+            "open_count": state.open_count,
+        }
+        result = self.llm.verify_intake(
+            context=context,
+            image_b64=image_b64,
+        )
+
+        # ----------------------------------------------------------
+        # Medication confirmed
+        # ----------------------------------------------------------
+
+        if result.visually_confirmed:
+            self.scheduler.mark_completed(compartment,medication.scheduled_hour)
+            state.taken_today = True
+            self.voice.speak(
+                result.message or ""
+            )
+
+            self.store.log_event(
+
+                compartment=compartment,
+                action="confirmed",
+                message=result.message or "",
+                label=medication.label,
+                scheduled_hour=medication.scheduled_hour,
+
+            )
+
+        # ----------------------------------------------------------
+        # Medication NOT confirmed
+        # ----------------------------------------------------------
+
+        else:
+            self.voice.speak(
+                result.message or ""
+            )
+            self.store.log_event(
+                compartment=compartment,
+                action="verification_failed",
+                message=result.message or "",
+                label=medication.label,
+                scheduled_hour=medication.scheduled_hour,
+            )
+
+        # ----------------------------------------------------------
+        # Debug output
+        # ----------------------------------------------------------
+
+        print("\n----------- Vision Result -----------")
+        print(f"Confirmed   : {result.visually_confirmed}")
+        print(f"Confidence  : {result.confidence:.2f}")
+        print(f"Explanation : {result.explanation}")
+        print("-------------------------------------\n")
+    
     # ------------------------------------------------------------------
     # Interactive Demo
     # ------------------------------------------------------------------
@@ -167,123 +193,87 @@ class SmartMedBox:
         Interactive development mode.
 
         Commands:
-
-            open <n>
-            take <n>
-            double <n>
-            overdue <n>
-            refill <n>
+            due
+            remind
+            alert
+            open
+            refill
             quit
         """
 
+        compartment = 0
+        medication = self.scheduler.medication_for(compartment)
+        
         print("=" * 60)
         print(" SmartMedBox — Interactive Demo")
         print("=" * 60)
 
         print("Commands:")
-        print("  open <n>      Open compartment n")
-        print("  take <n>      Simulate removing/taking dose n")
-        print("  double <n>    Open compartment n twice")
-        print("  overdue <n>   Simulate 35-minute overdue medication")
-        print("  refill <n>    Reset compartment")
+        print("  due      Send initial reminder")
+        print("  remind   Send repeated reminder")
+        print("  alert    Trigger caregiver alert")
+        print("  open     Simulate opening the medication box")
+        print("  refill   Reset today's medication")
         print("  quit")
         print("-" * 60)
 
         while True:
-
             try:
-
-                cmd = input("> ").strip().lower().split()
-
+                command = input("> ").strip().lower()
             except (EOFError, KeyboardInterrupt):
-
                 print()
-
                 break
 
-            if not cmd:
-
+            if not command:
                 continue
 
-            if cmd[0] == "quit":
-
+            if command == "quit":
                 break
 
-            if len(cmd) != 2 or not cmd[1].isdigit():
-
-                print("Usage: open|take|double|overdue|refill <compartment>")
-
-                continue
-
-            compartment = int(cmd[1])
-
-            if compartment not in self.sensors.compartments:
-
-                print(f"Compartment {compartment} does not exist.")
-
-                continue
-
-            # ----------------------------------------------------------
-
-            if cmd[0] == "open":
-
+            elif command == "open":
                 self.sensors.simulate_open(compartment)
+                self.process_compartment_open(compartment)
 
-                decision = self.process_medication_event(compartment)
-
-            elif cmd[0] == "take":
-
-                self.sensors.simulate_pill_removed(compartment)
-
-                decision = self.process_medication_event(compartment)
-
-            elif cmd[0] == "double":
-
-                self.sensors.simulate_open(compartment)
-
-                self.sensors.simulate_open(compartment)
-
-                decision = self.process_medication_event(compartment)
-
-            elif cmd[0] == "overdue":
-
-                decision = self.process_medication_event(
-
-                    compartment,
-
-                    minutes_overdue=35,
-
+            elif command == "due":
+                self.process_scheduler_event(
+                    ScheduleEvent(
+                        compartment=compartment,
+                        label=medication.label,
+                        scheduled_hour=medication.scheduled_hour,
+                        minutes_overdue=0,
+                        escalation="due",
+                    )
                 )
 
-            elif cmd[0] == "refill":
+            elif command == "remind":
+                self.process_scheduler_event(
+                    ScheduleEvent(
+                        compartment=compartment,
+                        label=medication.label,
+                        scheduled_hour=medication.scheduled_hour,
+                        minutes_overdue=10,
+                        escalation="remind",
+                    )
+                )
 
+            elif command == "alert":
+                self.process_scheduler_event(
+                    ScheduleEvent(
+                        compartment=compartment,
+                        label=medication.label,
+                        scheduled_hour=medication.scheduled_hour,
+                        minutes_overdue=35,
+                        escalation="alert_caregiver",
+                    )
+                )
+
+            elif command == "refill":
                 self.sensors.simulate_refill(compartment)
-
-                print(f"Compartment {compartment} refilled.")
-
-                continue
+                print("Medication compartment reset.")
 
             else:
-
                 print("Unknown command.")
-
-                continue
-
-            # ----------------------------------------------------------
-            # Display LLM decision
-            # ----------------------------------------------------------
-
-            print("\n---------------- Decision ----------------")
-
-            print(f"Action      : {decision.action}")
-
-            print(f"Message     : {decision.message}")
-
-            print(f"Confidence  : {decision.confidence:.2f}")
-
-            print(f"Caregiver   : {decision.notify_caregiver}")
-
-            print("------------------------------------------\n")
+                print("Available commands: due, remind, alert, open, refill, quit")
 
         print("Goodbye — stay healthy!")
 
@@ -303,17 +293,13 @@ class SmartMedBox:
 
         while True:
 
-            self.sensors.poll()
+            opened = self.sensors.poll()
 
             for event in self.scheduler.due_events():
-
-                self.process_medication_event(
-
-                    event.compartment,
-
-                    minutes_overdue=event.minutes_overdue,
-
-                )
+                self.process_scheduler_event(event)
+                
+            for compartment in opened:
+                self.process_compartment_open(compartment)
 
             time.sleep(2)
 
@@ -327,11 +313,9 @@ def main() -> None:
     box = SmartMedBox()
 
     if Config.is_mock():
-
         box.run_interactive()
 
     else:
-
         box.run()
 
 

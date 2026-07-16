@@ -28,57 +28,68 @@ logger = logging.getLogger(__name__)
 
 
 # ----------------------------------------------------------------------
-# Decision returned by the reasoning engine
+# Result returned by the reasoning engine
 # ----------------------------------------------------------------------
 
 @dataclass
-class Decision:
-    action: str
-    message: str
-    confidence: float
-    notify_caregiver: bool = False
+@dataclass
+class ReasoningResult:
+    message: str | None = None
+    visually_confirmed: bool | None = None
+    confidence: float = 1.0
+    explanation: str = ""
 
 
 # ----------------------------------------------------------------------
 # System Prompt
 # ----------------------------------------------------------------------
 
-SYSTEM_PROMPT = """
-You are an empathetic medication assistant for elderly users.
+REMINDER_PROMPT = """
+You are an empathetic medication assistant (SmartMedBox) for elderly users.
 
-You receive:
-1. Structured sensor data
-2. A photograph taken immediately after the medication compartment was opened.
+The medication schedule has already been determined by the scheduler.
 
-Use BOTH sources of information to decide the most appropriate action.
+Generate a short spoken reminder.
 
-If an image is provided:
-- Determine whether there is clear visual evidence that the user has just taken or is placing a pill into their mouth.
-- If the image is ambiguous or unclear, do NOT assume the medication has been taken.
-- Message shall be a response that you communicate through to the user. It should be supportive and reassuring.
-
-Return ONLY valid JSON.
+Return ONLY JSON.
 
 {
-    "action": "...",
-    "message": "...",
-    "confidence": confidence level (0.0-1.0),
-    "notify_caregiver": true/false
+    "message":"...",
+    "visually_confirmed": none,
+    "confidence":0.95,
+    "explanation": none
 }
 
-Allowed actions:
-- remind
-- confirm_taken
-- warn_double
-- alert_caregiver
-- idle
-
 Guidelines:
-- Keep messages under 30 words.
+- The scheduler already determines the escalation level. Never change it.
+- The escalation level will be one of:
+    • due: the medication is due now. Generate a friendly initial reminder.
+    • remind: the medication has not yet been taken. Generate a slightly more urgent reminder while remaining supportive.
+    • alert: the medication has been overdue for more than 30 minutes. Generate a message informing the user that their caregiver will be notified.
 - Never recommend medical decisions.
-- Never modify medication schedules.
 """
 
+VISION_SYSTEM_PROMPT = """
+You are an empathetic medication assistant (SmartMedBox) for elderly users.
+
+Your only task is determining whether the user has taken their medication.
+
+You receive one photograph captured immediately after the medication compartment was opened.
+
+Return ONLY JSON.
+
+{   "message":"...",
+    "visually_confirmed": true,
+    "confidence": 0.94,
+    "explanation": "..."
+}
+
+Guidelines:
+- Determine whether there is clear visual evidence that the user has just taken or is placing a pill into their mouth.
+- If the image is ambiguous or unclear, do NOT assume the medication has been taken. Set "visually_confirmed" to false.
+- Keep confirming messages short. Be warm, supportive, and easy for elderly users to understand.
+- Explanation should be a short summary of the reasoning behind the decision, including all relevant context from the sensors and image analysis.
+"""
 
 # ----------------------------------------------------------------------
 # LLM Engine
@@ -101,31 +112,16 @@ class LLMEngine:
 
     # ------------------------------------------------------------------
 
-    def reason(
+    def generate_reminder(
     self,
     context: dict,
-    image_b64: str | None = None,
-    ) -> Decision:
+) -> ReasoningResult:
         """
-        Decide what SmartMedBox should do.
+        Generate a reminder message from scheduler context.
 
-        Parameters
-        ----------
-        context:
-            Structured sensor context.
-
-        image_b64:
-            Base64-encoded image captured after the compartment
-            was opened. Can be None if no image was taken.
-
-        Example context:
-
-        {
-            "compartment": 1,
-            "scheduled": True,
-            "open_count": 1,
-            "minutes_overdue": 5
-        }
+        The scheduler already determines the escalation level
+        (due, remind, alert_caregiver). This method only produces
+        an empathetic spoken message.
         """
 
         if self.client is None:
@@ -134,67 +130,57 @@ class LLMEngine:
         try:
 
             # ----------------------------------------------------------
-            # Build multimodal user content
+            # Build text-only prompt
             # ----------------------------------------------------------
 
-            user_content: list[dict] =  [
-                {
-                    "type": "text",
-                    "text": (
-                        "Current SmartMedBox context:\n\n"
-                        + json.dumps(context, indent=2)
-                    ),
-                }
-            ]
-
-            if image_b64 is not None:
-                user_content.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_b64}"
-                        },
-                    }
-                )
+            user_content = (
+                "Current SmartMedBox reminder context:\n\n"
+                + json.dumps(context, indent=2)
+            )
 
             # ----------------------------------------------------------
             # Call GPT
             # ----------------------------------------------------------
-            print(f"Model: {self.model!r}")
+
             response = self.client.chat.completions.create(
+
                 model=self.model,
+
                 messages=[
+
                     {
                         "role": "system",
-                        "content": SYSTEM_PROMPT,
+                        "content": REMINDER_PROMPT,
                     },
+
                     {
                         "role": "user",
-                        "content": user_content
+                        "content": user_content,
                     },
+
                 ],
-                temperature=0.2,
+
+                temperature=0.3,
+
             )
+
             content = response.choices[0].message.content
             assert content is not None
 
-            print("===== LLM OUTPUT =====")
-            print(repr(content))
-            print("======================")
+            logger.debug("Reminder LLM output:\n%s", content)
 
             return self._parse(content)
 
         except Exception:
 
-            logger.exception("LLM reasoning failed.")
+            logger.exception("Reminder generation failed.")
 
             return self._rule_based_fallback(context)
-
     # ------------------------------------------------------------------
 
-    def _parse(self, output_text: str) -> Decision:
+    def _parse(self, output_text: str) -> ReasoningResult:
         """
-        Parse the LLM response into a Decision.
+        Parse the LLM response into a ReasoningResult.
         Supports both plain JSON and Markdown-wrapped JSON.
         """
 
@@ -219,141 +205,137 @@ class LLMEngine:
             logger.exception("Failed to parse LLM output:\n%s", output_text)
             raise
 
-        return Decision(
-            action=payload.get("action", "idle"),
+        return ReasoningResult(
             message=payload.get("message", ""),
+            visually_confirmed=bool(payload.get("visually_confirmed", False)),
             confidence=float(payload.get("confidence", 1.0)),
-            notify_caregiver=bool(payload.get("notify_caregiver", False)),
+            explanation=payload.get("explanation", ""),
         )
 
     # ------------------------------------------------------------------
 
-    def _rule_based_fallback(self, context: dict) -> Decision:
+    def _rule_based_fallback(self, context: dict) -> ReasoningResult:
         """
-        Runs when the API is unavailable.
+        Fallback used when the OpenAI API is unavailable.
 
-        Keeps SmartMedBox fully functional offline.
+        The scheduler has already determined the escalation level.
+        This method simply generates a deterministic message.
+        No visual confirmation is possible without the LLM.
         """
+        escalation = context.get("escalation", "due")
 
-        opened = context.get("open_count", 0)
-
-        overdue = context.get("minutes_overdue", 0)
-
-        vision_confirmed = context.get("vision_confirmed", False)
-        if not vision_confirmed:
-            vision_confirmed = context.get("is_empty", False)
-
-        # --------------------------------------------------------------
-
-        # Possible double dose
-
-        if opened >= 2:
-
-            return Decision(
-
-                action="warn_double",
-
-                message=(
-                    "This compartment has already been opened. "
-                    "Let's make sure you haven't already taken "
-                    "your medication."
-                ),
-
-                confidence=0.95,
-
-                notify_caregiver=True,
-
+        if escalation == "due":
+            return ReasoningResult(
+                message="It's time to take your medication.",
+                visually_confirmed=False,
+                confidence=1.0,
+                explanation="Rule-based fallback: initial reminder."
             )
 
-        # --------------------------------------------------------------
-
-        # Medication confirmed
-
-        if opened >= 1 and vision_confirmed:
-
-            return Decision(
-
-                action="confirm_taken",
-
-                message=(
-                    "Great! I've confirmed your medication intake. "
-                    "Have a wonderful day!"
-                ),
-
-                confidence=0.95,
-
+        if escalation == "remind":
+            return ReasoningResult(
+                message="Just a gentle reminder that your medication is still waiting.",
+                visually_confirmed=False,
+                confidence=1.0,
+                explanation="Rule-based fallback: repeated reminder."
             )
 
-        # --------------------------------------------------------------
-
-        # Compartment opened but intake NOT confirmed
-
-        if opened >= 1 and not vision_confirmed:
-
-            return Decision(
-
-                action="remind",
-
-                message=(
-                    "I couldn't confirm your medication yet. "
-                    "Please hold the pill near your mouth "
-                    "so I can verify it."
-                ),
-
-                confidence=0.80,
-
+        if escalation == "alert_caregiver":
+            return ReasoningResult(
+                message="Your medication is overdue. Your caregiver will be notified.",
+                visually_confirmed=False,
+                confidence=1.0,
+                explanation="Rule-based fallback: caregiver alert."
             )
 
-        # --------------------------------------------------------------
-
-        # Medication overdue
-
-        if overdue >= 30:
-
-            return Decision(
-
-                action="alert_caregiver",
-
-                message=(
-                    "Your medication is still overdue. "
-                    "I'll notify your caregiver "
-                    "so they can check in."
-                ),
-
-                confidence=0.90,
-
-                notify_caregiver=True,
-
-            )
-
-        # --------------------------------------------------------------
-
-        # Gentle reminder
-
-        if overdue > 0:
-
-            return Decision(
-
-                action="remind",
-
-                message=(
-                    "It's time to take your medication."
-                ),
-
-                confidence=0.80,
-
-            )
-
-        # --------------------------------------------------------------
-
-        return Decision(
-
-            action="idle",
-
+        return ReasoningResult(
             message="",
-
+            visually_confirmed=False,
             confidence=1.0,
-
+            explanation="Rule-based fallback: no action required."
         )
         
 
+    def verify_intake(
+        self,
+        context: dict,
+        image_b64: str,
+    ) -> ReasoningResult:
+        """
+        Verify whether the user has taken their medication from
+        a single image captured after the compartment was opened.
+
+        Returns
+        -------
+        ReasoningResult
+            Structured reasoning result.
+        """
+
+        if self.client is None:
+            return ReasoningResult(
+                message="Couldn't verify medication intake: server unavailable.",
+                visually_confirmed=False,
+                confidence=1.0,
+                explanation="Rule-based fallback: vision unavailable.",
+            )
+
+        try:
+
+            user_content = [
+
+                {
+                    "type": "text",
+                    "text": (
+                        "Current SmartMedBox reminder context:\n\n" + json.dumps(context, indent=2)
+                    ),
+                },
+
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{image_b64}"
+                    },
+                },
+
+            ]
+
+            response = self.client.chat.completions.create(
+
+                model=self.model,
+
+                messages=[
+
+                    {
+                        "role": "system",
+                        "content": VISION_SYSTEM_PROMPT,
+                    },
+
+                    {
+                        "role": "user",
+                        "content": user_content,
+                    },
+
+                ],
+
+                temperature=0,
+
+            )
+
+            content = response.choices[0].message.content
+            assert content is not None
+
+            logger.debug("Vision LLM output:\n%s", content)
+
+            return self._parse(content)
+
+        except Exception:
+
+            logger.exception("Vision verification failed.")
+
+            return ReasoningResult(
+                message="Couldn't verify medication intake: server unavailable.",
+                visually_confirmed=False,
+                confidence=0.0,
+                explanation="Vision verification failed.",
+
+            )
