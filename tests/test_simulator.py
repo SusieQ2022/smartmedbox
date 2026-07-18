@@ -13,6 +13,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from llm_engine import LLMEngine  # noqa: E402
+from simulator import run_demo  # noqa: E402
+from store import AdherenceStore  # noqa: E402
 
 
 def make_engine():
@@ -46,3 +48,27 @@ def test_unknown_escalation_returns_empty():
     engine = make_engine()
     result = engine.generate_reminder({"escalation": "something_else"})
     assert result.message == ""
+
+
+def test_demo_logs_all_scenes_for_the_dashboard(tmp_path):
+    store = AdherenceStore(str(tmp_path / "events.db"))
+
+    run_demo(use_live_vision=False, store=store, pause_seconds=0)
+
+    events = store.events_today()
+    assert [event["action"] for event in events] == [
+        "due",
+        "remind",
+        "alert_caregiver",
+        "confirmed",
+        "verification_failed",
+    ]
+    assert events[2]["notified"] == 1
+    assert store.summary_today() == {
+        "taken": 1,
+        "late": 1,
+        "missed": 1,
+        "unverified": 1,
+        "alerts": 1,
+        "total": 5,
+    }
