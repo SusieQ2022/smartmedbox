@@ -24,8 +24,9 @@ class Config:
 
     # ── LLM / OpenAI ──
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o")
-    VISION_MODEL: str = os.getenv("VISION_MODEL", "gpt-4o")
+    DEFAULT_KICONNECT_MODEL = "Mistral Small 3-2-24b Instruct KI:Inferenz.nrw"
+    LLM_MODEL: str = os.getenv("LLM_MODEL", DEFAULT_KICONNECT_MODEL)
+    VISION_MODEL: str = os.getenv("VISION_MODEL", DEFAULT_KICONNECT_MODEL)
     KICONNECT_API_KEY: str = os.getenv("KICONNECT_API_KEY", "")
     KICONNECT_BASE_URL: str = os.getenv(
         "KICONNECT_BASE_URL",
