@@ -23,8 +23,20 @@ import time
 
 try:
     from .llm_engine import LLMEngine, ReasoningResult
+    from .store import (
+        ACTION_ALERT_CAREGIVER,
+        ACTION_CONFIRMED,
+        ACTION_VERIFICATION_FAILED,
+        AdherenceStore,
+    )
 except ImportError:
     from llm_engine import LLMEngine, ReasoningResult
+    from store import (
+        ACTION_ALERT_CAREGIVER,
+        ACTION_CONFIRMED,
+        ACTION_VERIFICATION_FAILED,
+        AdherenceStore,
+    )
 
 
 PAUSE = 2.0
@@ -46,7 +58,11 @@ def _print(title: str, context: dict, result) -> None:
     print("=" * 62)
 
 
-def run_demo(use_live_vision: bool = True) -> None:
+def run_demo(
+    use_live_vision: bool = True,
+    store: AdherenceStore | None = None,
+    pause_seconds: float = PAUSE,
+) -> None:
     """
     Run the full automated demo.
 
@@ -56,7 +72,13 @@ def run_demo(use_live_vision: bool = True) -> None:
         If True, the intake-verification scenes call the live LLM vision model.
         If it is unavailable, they fall back to a simulated result so the demo
         still completes.
+    store:
+        Event store used by the caregiver dashboard. Defaults to the same
+        configured SQLite database as main.py.
+    pause_seconds:
+        Delay between scenes. Tests set this to zero.
     """
+    store = store or AdherenceStore()
     engine = LLMEngine()
 
     print("\n" + "#" * 62)
@@ -70,27 +92,42 @@ def run_demo(use_live_vision: bool = True) -> None:
 
     reminder_scenes = [
         ("08:00 — Dose becomes due",
-         {"escalation": "due", "compartment": 1, "label": "Vitamin D", "minutes_overdue": 0}),
+         {"escalation": "due", "compartment": 0, "label": "Vitamin D", "minutes_overdue": 0}),
         ("08:15 — Still not taken, gentle reminder",
-         {"escalation": "remind", "compartment": 1, "label": "Vitamin D", "minutes_overdue": 15}),
+         {"escalation": "remind", "compartment": 0, "label": "Vitamin D", "minutes_overdue": 15}),
         ("08:35 — Overdue, caregiver alerted",
-         {"escalation": "alert_caregiver", "compartment": 1, "label": "Vitamin D", "minutes_overdue": 35}),
+         {"escalation": "alert_caregiver", "compartment": 0, "label": "Vitamin D", "minutes_overdue": 35}),
     ]
 
     for title, ctx in reminder_scenes:
         result = reminder_engine.generate_reminder(context=ctx)
         _print(title, ctx, result)
-        time.sleep(PAUSE)
+        store.log_event(
+            compartment=ctx["compartment"],
+            action=ctx["escalation"],
+            message=result.message or "",
+            label=ctx["label"],
+            scheduled_hour=8,
+            notified=(ctx["escalation"] == ACTION_ALERT_CAREGIVER),
+            minutes_overdue=ctx["minutes_overdue"],
+        )
+        time.sleep(pause_seconds)
 
     # ── Vision line: intake verification ──
-    _run_vision(engine, use_live_vision)
+    _run_vision(engine, use_live_vision, store, pause_seconds)
 
     print("\n" + "#" * 62)
     print("#  Demo complete.")
+    print(f"#  Dashboard events: {store.db_path}")
     print("#" * 62 + "\n")
 
 
-def _run_vision(engine: LLMEngine, use_live: bool) -> None:
+def _run_vision(
+    engine: LLMEngine,
+    use_live: bool,
+    store: AdherenceStore,
+    pause_seconds: float,
+) -> None:
     """Demonstrate intake verification for a 'taken' and a 'not taken' image."""
     import base64
     from pathlib import Path
@@ -102,7 +139,7 @@ def _run_vision(engine: LLMEngine, use_live: bool) -> None:
     ]
 
     for title, filename, simulated_confirmed in cases:
-        ctx = {"compartment": 1, "open_count": 1, "label": "Vitamin D"}
+        ctx = {"compartment": 0, "open_count": 1, "label": "Vitamin D"}
         image_path = project_root / "assets" / filename
 
         result = None
@@ -126,7 +163,18 @@ def _run_vision(engine: LLMEngine, use_live: bool) -> None:
             )
 
         _print(title, ctx, result)
-        time.sleep(PAUSE)
+        store.log_event(
+            compartment=ctx["compartment"],
+            action=(
+                ACTION_CONFIRMED
+                if result.visually_confirmed
+                else ACTION_VERIFICATION_FAILED
+            ),
+            message=result.message or "",
+            label=ctx["label"],
+            scheduled_hour=8,
+        )
+        time.sleep(pause_seconds)
 
 
 if __name__ == "__main__":

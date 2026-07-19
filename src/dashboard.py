@@ -3,7 +3,7 @@ dashboard.py - caregiver view for SmartMedBox adherence events.
 
 Run from the repository root:
 
-    python src/dashboard.py --port 8000
+    python src/dashboard.py --host 0.0.0.0 --port 8000
 
 The dashboard reads the same SQLite event log written by store.py/main.py.
 It shows structured decisions only; raw camera images are not stored or served.
@@ -17,10 +17,38 @@ from urllib.parse import urlparse
 
 try:
     from .config import Config
-    from .store import AdherenceStore
+    from .store import (
+        ACTION_ALERT_CAREGIVER,
+        ACTION_CONFIRMED,
+        ACTION_DUE,
+        ACTION_REMIND,
+        ACTION_VERIFICATION_FAILED,
+        AdherenceStore,
+    )
 except ImportError:
     from config import Config
-    from store import AdherenceStore
+    from store import (
+        ACTION_ALERT_CAREGIVER,
+        ACTION_CONFIRMED,
+        ACTION_DUE,
+        ACTION_REMIND,
+        ACTION_VERIFICATION_FAILED,
+        AdherenceStore,
+    )
+
+
+ACTION_PRESENTATION = {
+    ACTION_DUE: ("Due", "due"),
+    ACTION_REMIND: ("Reminder", "remind"),
+    ACTION_ALERT_CAREGIVER: ("Caregiver alert", "alert_caregiver"),
+    ACTION_CONFIRMED: ("Confirmed", "confirmed"),
+    ACTION_VERIFICATION_FAILED: ("Unverified", "verification_failed"),
+    # Preserve readable history from the original event vocabulary.
+    "confirm_taken": ("Confirmed", "confirmed"),
+    "taken": ("Confirmed", "confirmed"),
+    "late": ("Reminder", "remind"),
+    "missed": ("Caregiver alert", "alert_caregiver"),
+}
 
 
 def render_dashboard(summary: Dict[str, int], events: List[Dict]) -> str:
@@ -37,7 +65,7 @@ def render_dashboard(summary: Dict[str, int], events: List[Dict]) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="30">
+  <meta http-equiv="refresh" content="10">
   <title>SmartMedBox Caregiver Dashboard</title>
   <style>
     :root {{
@@ -140,10 +168,11 @@ def render_dashboard(summary: Dict[str, int], events: List[Dict]) -> str:
       text-align: center;
       white-space: nowrap;
     }}
-    .confirm_taken, .taken {{ background: var(--ok); }}
+    .confirmed, .confirm_taken, .taken {{ background: var(--ok); }}
+    .due {{ background: var(--info); }}
     .remind, .late {{ background: var(--warn); }}
     .alert_caregiver, .missed {{ background: var(--bad); }}
-    .warn_double, .double {{ background: #7c3aed; }}
+    .verification_failed {{ background: #7c3aed; }}
     .idle {{ background: var(--info); }}
     .empty {{
       color: var(--muted);
@@ -154,8 +183,30 @@ def render_dashboard(summary: Dict[str, int], events: List[Dict]) -> str:
       main {{ width: min(100% - 20px, 1120px); margin: 16px auto; }}
       header {{ align-items: start; flex-direction: column; }}
       .summary {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-      table {{ table-layout: auto; }}
-      th:nth-child(4), td:nth-child(4) {{ display: none; }}
+      section {{ background: transparent; border: 0; overflow: visible; }}
+      table, tbody {{ display: block; }}
+      thead {{ display: none; }}
+      tbody {{ display: grid; gap: 10px; }}
+      tr {{
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }}
+      td {{ border: 0; padding: 10px 12px; }}
+      td::before {{
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: bold;
+        text-transform: uppercase;
+      }}
+      td:nth-child(1), td:nth-child(6) {{ grid-column: 1 / -1; }}
+      .empty {{ grid-column: 1 / -1; }}
     }}
   </style>
 </head>
@@ -166,13 +217,13 @@ def render_dashboard(summary: Dict[str, int], events: List[Dict]) -> str:
         <h1>SmartMedBox Caregiver Dashboard</h1>
         <p class="subtle">Today: {summary.get("total", 0)} logged events</p>
       </div>
-      <p class="subtle">Auto-refreshes every 30 seconds</p>
+      <p class="subtle">Auto-refreshes every 10 seconds</p>
     </header>
     <div class="summary">
       {_metric("Taken", summary.get("taken", 0))}
       {_metric("Late", summary.get("late", 0))}
       {_metric("Missed", summary.get("missed", 0))}
-      {_metric("Double", summary.get("double", 0))}
+      {_metric("Unverified", summary.get("unverified", 0))}
       {_metric("Alerts", summary.get("alerts", 0))}
     </div>
     <section>
@@ -202,7 +253,11 @@ def _metric(label: str, value: int) -> str:
 
 
 def _render_event_row(event: Dict) -> str:
-    action = escape(str(event.get("action") or "idle"))
+    raw_action = str(event.get("action") or "idle").lower()
+    action_label, action_class = ACTION_PRESENTATION.get(
+        raw_action,
+        (raw_action.replace("_", " ").title(), "idle"),
+    )
     label = escape(str(event.get("label") or f"Compartment {event.get('compartment', '')}"))
     message = escape(str(event.get("message") or ""))
     ts = escape(str(event.get("ts") or ""))
@@ -211,12 +266,12 @@ def _render_event_row(event: Dict) -> str:
 
     return f"""
 <tr>
-  <td>{ts}</td>
-  <td>{label}</td>
-  <td><span class="tag {action}">{action}</span></td>
-  <td>{overdue} min</td>
-  <td>{notified}</td>
-  <td>{message}</td>
+  <td data-label="Time">{ts}</td>
+  <td data-label="Dose">{label}</td>
+  <td data-label="Outcome"><span class="tag {action_class}">{escape(action_label)}</span></td>
+  <td data-label="Overdue">{overdue} min</td>
+  <td data-label="Alert">{notified}</td>
+  <td data-label="Message">{message}</td>
 </tr>"""
 
 
