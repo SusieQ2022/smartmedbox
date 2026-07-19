@@ -13,6 +13,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from llm_engine import LLMEngine  # noqa: E402
+from dashboard import ACTION_PRESENTATION  # noqa: E402
 from simulator import run_demo  # noqa: E402
 from store import AdherenceStore  # noqa: E402
 
@@ -56,13 +57,15 @@ def test_demo_logs_all_scenes_for_the_dashboard(tmp_path):
     run_demo(use_live_vision=False, store=store, pause_seconds=0)
 
     events = store.events_today()
-    assert [event["action"] for event in events] == [
+    logged_actions = [event["action"] for event in events]
+    assert logged_actions == [
         "due",
         "remind",
         "alert_caregiver",
         "confirmed",
         "verification_failed",
     ]
+    assert set(logged_actions).issubset(ACTION_PRESENTATION)
     assert events[2]["notified"] == 1
     assert store.summary_today() == {
         "taken": 1,
