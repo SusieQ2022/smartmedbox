@@ -212,15 +212,6 @@ class SmartMedBox:
 
         # Give the user time to take the pill out
         time.sleep(10)
-    def process_compartment_close(self, compartment: int) -> None:
-        """
-        Handle the medication box being closed.
-
-        Clears the OLED display so it doesn't stay lit
-        while the box is idle.
-        """
-        print(f"[main] Compartment {compartment} closed — shutting down display.")
-        self.display.clear()
 
         
     
@@ -329,6 +320,15 @@ class SmartMedBox:
         print(f"Explanation : {result.explanation}")
         print("-------------------------------------\n")
     
+    def process_compartment_close(self, compartment: int) -> None:
+        """
+        Handle the medication box being closed.
+
+        Clears the OLED display so it doesn't stay lit
+        while the box is idle.
+        """
+        print(f"[main] Compartment {compartment} closed — shutting down display.")
+        self.display.clear()
 # ------------------------------------------------------------------
 # Interactive Demo
 # ------------------------------------------------------------------
