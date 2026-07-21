@@ -21,8 +21,9 @@ class CompartmentState:
     index: int
     open_count: int = 0
     last_processed_open_count: int = 0
+    close_count: int = 0
+    last_processed_close_count: int = 0
     taken_today: bool = False  # whether this dose was already taken today
-
 
 
 class SensorArray:
@@ -69,11 +70,6 @@ class SensorArray:
 
         initial_state = GPIO.input(self._reed_pin)
 
-        print(
-            f"[sensors] Initial GPIO17 state: {initial_state} "
-            f"({'open' if initial_state == 1 else 'closed'})"
-        )
-
         # Remove any old detector left on this pin.
         try:
            GPIO.remove_event_detect(self._reed_pin)
@@ -86,7 +82,7 @@ class SensorArray:
         try:
            GPIO.add_event_detect(
                self._reed_pin,
-               GPIO.RISING,
+               GPIO.BOTH,
                callback=self._reed_callback,
                bouncetime=1000,
            )
@@ -100,9 +96,17 @@ class SensorArray:
            raise
 
     def _reed_callback(self, channel: int) -> None:
-        """Called whenever the reed switch is triggered."""
-        print(f"[sensors] Reed switch opened on GPIO {channel}")
-        self.compartments[0].open_count += 1
+        """Called whenever the reed switch changes state."""
+        state = GPIO.input(self._reed_pin)
+
+        if state == GPIO.HIGH:
+            # Magnet moved away → lid opened
+            print(f"[sensors] Reed switch OPENED on GPIO {channel}")
+            self.compartments[0].open_count += 1
+        else:
+            # Magnet returned → lid closed
+            print(f"[sensors] Reed switch CLOSED on GPIO {channel}")
+            self.compartments[0].close_count += 1
     
     def poll(self) -> list[int]:
         """
@@ -123,6 +127,17 @@ class SensorArray:
                 opened.append(index)
 
         return opened
+    
+    def poll_closed(self) -> list[int]:
+        """
+        Return compartments that have been closed since the last poll.
+        """
+        closed: list[int] = []
+        for index, state in self.compartments.items():
+            if state.close_count > state.last_processed_close_count:
+                state.last_processed_close_count = state.close_count
+                closed.append(index)
+        return closed
 
 
     # ── Mock helpers (used by the simulator / tests only) ──
