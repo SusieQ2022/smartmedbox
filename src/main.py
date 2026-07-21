@@ -27,8 +27,13 @@ simulation of medication events.
 
 from __future__ import annotations
 
-import time
+import textwrap
 
+from luma.core.interface.serial import i2c
+from luma.core.render import canvas
+from luma.oled.device import sh1106
+from PIL import ImageFont
+import time
 from config import Config
 from sensors import SensorArray
 from camera import Camera
@@ -38,6 +43,76 @@ from notifier import Notifier
 from store import AdherenceStore
 from scheduler import ReminderScheduler, ScheduleEvent
 from datetime import date, datetime
+
+class OLEDDisplay:
+    """Controls the SH1106 OLED display at I2C address 0x3C."""
+
+    def __init__(self) -> None:
+        self.device = None
+        self.font = None
+
+        try:
+            serial = i2c(
+                port=1,
+                address=0x3C,
+            )
+
+            self.device = sh1106(serial)
+            self.font = ImageFont.load_default()
+
+            self.show_message(
+                "SmartMedBox",
+                "Starting...",
+            )
+
+            print("[display] OLED initialized.")
+
+        except Exception as error:
+            print(f"[display] OLED initialization failed: {error}")
+            self.device = None
+
+    def show_message(self, *messages: str) -> None:
+        """Display wrapped text on the OLED."""
+
+        if self.device is None:
+            print("[display]", " | ".join(messages))
+            return
+
+        lines: list[str] = []
+
+        for message in messages:
+            wrapped = textwrap.wrap(
+                str(message),
+                width=20,
+            )
+
+            lines.extend(wrapped or [""])
+
+        try:
+            with canvas(self.device) as draw:
+                y_position = 0
+
+                for line in lines[:6]:
+                    draw.text(
+                        (0, y_position),
+                        line,
+                        font=self.font,
+                        fill="white",
+                    )
+
+                    y_position += 10
+
+        except Exception as error:
+            print(f"[display] Message failed: {error}")
+
+    def clear(self) -> None:
+        """Clear the OLED."""
+
+        if self.device is not None:
+            try:
+                self.device.clear()
+            except Exception:
+                pass
 
 
 class SmartMedBox:
@@ -55,6 +130,7 @@ class SmartMedBox:
         self.camera = Camera()
         self.llm = LLMEngine()
         self.voice = Voice()
+        self.display = OLEDDisplay()
         self.notifier = Notifier()
         self.store = AdherenceStore()
         self.scheduler = ReminderScheduler(self.sensors)
@@ -109,24 +185,32 @@ class SmartMedBox:
             Mark dose completed (if confirmed)
                 ↓
             Log event
-    """
+        """
         state = self.sensors.compartments[compartment]
         medication = self.scheduler.medication_for(compartment) 
         
+
         # Ask the user to present the pill
         self.voice.speak(
             "Please hold the pill near your mouth. I will check in five seconds."
         )
+        
+        self.display.show_message(
+            "Medicine box opened",
+            "Please take medicine",
+            "Photo in 10 seconds",
+        )
 
         # Give the user time to take the pill out
-        time.sleep(5)
+        time.sleep(20)
     
         # ----------------------------------------------------------
         # Capture image
         # ----------------------------------------------------------
         
         image_path = self.camera.capture()
-        image_b64 = Camera.encode_base64(image_path)
+        print(f"[camera] Photo captured: {image_path}")
+        #image_b64 = Camera.encode_base64(image_path)
 
         if image_b64 is None:
             print("[camera] Failed to capture image.")
@@ -136,52 +220,81 @@ class SmartMedBox:
         # Vision verification
         # ----------------------------------------------------------
 
-        context = {
-            "compartment": compartment,
-            "label": medication.label,
-            "open_count": state.open_count,
-        }
-        result = self.llm.verify_intake(
-            context=context,
-            image_b64=image_b64,
-        )
+        #context = {
+            #"compartment": compartment,
+            #"label": medication.label,
+            #"open_count": state.open_count,
+        #}
+        #result = self.llm.verify_intake(
+            #context=context,
+            #image_b64=image_b64,
+        #)
 
         # ----------------------------------------------------------
         # Medication confirmed
         # ----------------------------------------------------------
 
-        if result.visually_confirmed:
-            self.scheduler.mark_completed(compartment,medication.scheduled_hour)
-            state.taken_today = True
-            self.voice.speak(
-                result.message or ""
-            )
+        #if result.visually_confirmed:
+            #self.scheduler.mark_completed(compartment,medication.scheduled_hour)
+            #self.display = OLEDDisplay()
+            #state.taken_today = True
+            #self.voice.speak(
+                #result.message or ""
+            #)
 
-            self.store.log_event(
+            #self.store.log_event(
 
-                compartment=compartment,
-                action="confirmed",
-                message=result.message or "",
-                label=medication.label,
-                scheduled_hour=medication.scheduled_hour,
+                #compartment=compartment,
+                #action="confirmed",
+                #message=result.message or "",
+                #label=medication.label,
+                #scheduled_hour=medication.scheduled_hour,
 
-            )
+            #)
 
         # ----------------------------------------------------------
         # Medication NOT confirmed
         # ----------------------------------------------------------
 
-        else:
-            self.voice.speak(
-                result.message or ""
-            )
-            self.store.log_event(
-                compartment=compartment,
-                action="verification_failed",
-                message=result.message or "",
-                label=medication.label,
-                scheduled_hour=medication.scheduled_hour,
-            )
+        #else:
+            #self.voice.speak(
+                #result.message or ""
+            #)
+            #self.store.log_event(
+                #compartment=compartment,
+                #action="verification_failed",
+                #message=result.message or "",
+                #label=medication.label,
+                #scheduled_hour=medication.scheduled_hour,
+            #)
+
+        # ----------------------------------------------------------
+        # Temporary validation solution
+        # ----------------------------------------------------------
+        
+        self.scheduler.mark_completed(
+            compartment,
+            medication.scheduled_hour,
+        )
+
+        state.taken_today = True
+
+        confirmation_message = "Medicine finally taken."
+
+        self.voice.speak(confirmation_message)
+
+        self.display.show_message(
+            "Medicine finally taken",
+            "Successfully recorded",
+        )
+
+        self.store.log_event(
+            compartment=compartment,
+            action="confirmed",
+            message=confirmation_message,
+            label=medication.label,
+            scheduled_hour=medication.scheduled_hour,
+        )
 
         # ----------------------------------------------------------
         # Debug output
@@ -193,9 +306,9 @@ class SmartMedBox:
         print(f"Explanation : {result.explanation}")
         print("-------------------------------------\n")
     
-    # ------------------------------------------------------------------
-    # Interactive Demo
-    # ------------------------------------------------------------------
+# ------------------------------------------------------------------
+# Interactive Demo
+# ------------------------------------------------------------------
 
     def run_interactive(self) -> None:
         """
@@ -291,26 +404,35 @@ class SmartMedBox:
     # ------------------------------------------------------------------
 
     def run(self) -> None:
-        """
-        Hardware execution loop.
-
-        In the final Raspberry Pi implementation this loop will be driven
-        by the medication schedule and reed-switch interrupts.
-        """
-
         print("[main] Running on Raspberry Pi...")
+        print("[main] Waiting for the medicine box to open.")
 
-        while True:
+        try:
+           while True:
+              opened = self.sensors.poll()
 
-            opened = self.sensors.poll()
-
-            for event in self.scheduler.due_events():
+              if opened:
+                print(f"[DEBUG] Opened compartments: {opened}")
+  
+              for event in self.scheduler.due_events():
                 self.process_scheduler_event(event)
-                
-            for compartment in opened:
-                self.process_compartment_open(compartment)
 
-            time.sleep(2)
+              for compartment in opened:
+                self.process_compartment_open(compartment)
+ 
+              time.sleep(0.2)
+
+        except KeyboardInterrupt:
+           print("\n[main] Stopping SmartMedBox...")
+
+        finally:
+           self.sensors.cleanup()
+
+
+    # ----------------------------------------------------------------------
+    # Entry Point
+    # ----------------------------------------------------------------------
+
 
 
 # ----------------------------------------------------------------------
@@ -318,16 +440,13 @@ class SmartMedBox:
 # ----------------------------------------------------------------------
 
 def main() -> None:
-
     box = SmartMedBox()
 
     if Config.is_mock():
         box.run_interactive()
-
     else:
         box.run()
 
 
 if __name__ == "__main__":
-
     main()
