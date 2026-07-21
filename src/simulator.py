@@ -16,21 +16,17 @@ from __future__ import annotations
 import time
 
 from main import SmartMedBox
+from scheduler import ScheduleEvent
 
 
 # Seconds to pause between scenes so the audience can read each result.
-PAUSE = 2.0
+PAUSE = 3.0
 
 
-def _print_decision(scene: str, decision) -> None:
-    """Pretty-print the outcome of one scenario."""
+def _scene_header(title: str) -> None:
+    """Print a visible scene separator."""
     print("\n" + "=" * 60)
-    print(f" SCENE: {scene}")
-    print("=" * 60)
-    print(f"Action     : {decision.action}")
-    print(f"Message    : {decision.message}")
-    print(f"Confidence : {decision.confidence:.2f}")
-    print(f"Caregiver  : {decision.notify_caregiver}")
+    print(f"  SCENE: {title}")
     print("=" * 60)
 
 
@@ -39,9 +35,9 @@ def run_demo(deterministic: bool = True) -> None:
     Run the full automated demo scenario.
 
     When `deterministic` is True, the demo forces the rule-based reasoning
-    path so that safety-critical behaviours (double-take warning, caregiver
-    alert) are shown reliably and predictably, independent of live LLM
-    variability. Set to False to demo the live LLM instead.
+    path so that safety-critical behaviours (caregiver alert) are shown
+    reliably and predictably, independent of live LLM variability.
+    Set to False to demo the live LLM instead.
     """
     box = SmartMedBox()
 
@@ -54,32 +50,49 @@ def run_demo(deterministic: bool = True) -> None:
     print("#  A day in the life of an elderly patient")
     print("#" * 60)
 
-    # ── Scene 1: Morning dose taken on time ──
-    # Patient opens compartment 0 and takes the morning pill.
-    box.sensors.simulate_pill_removed(0)
-    decision = box.process_medication_event(0)
-    _print_decision("08:00 — Morning dose taken on time", decision)
+    # ── Scene 1: Morning dose due — friendly first reminder ──
+    _scene_header("08:00 — Morning dose due, friendly reminder")
+    box.process_scheduler_event(
+        ScheduleEvent(
+            compartment=0,
+            label="Vitamin D",
+            scheduled_hour=8,
+            minutes_overdue=0,
+            escalation="due",
+        )
+    )
     time.sleep(PAUSE)
 
-    # ── Scene 2: Noon dose missed — gentle reminder ──
-    # Compartment 1 not opened yet, and it is slightly overdue.
-    decision = box.process_medication_event(1, minutes_overdue=10)
-    _print_decision("12:10 — Noon dose overdue, gentle reminder", decision)
+    # ── Scene 2: Morning dose still not taken — repeated reminder ──
+    _scene_header("08:10 — Morning dose overdue, repeated reminder")
+    box.process_scheduler_event(
+        ScheduleEvent(
+            compartment=0,
+            label="Vitamin D",
+            scheduled_hour=8,
+            minutes_overdue=10,
+            escalation="remind",
+        )
+    )
     time.sleep(PAUSE)
 
-    # ── Scene 3: Noon dose still missed — caregiver alerted ──
-    # Same compartment, now well past the threshold.
-    decision = box.process_medication_event(1, minutes_overdue=35)
-    _print_decision("12:35 — Still not taken, caregiver alerted", decision)
+    # ── Scene 3: Morning dose well overdue — caregiver alerted ──
+    _scene_header("08:35 — Still not taken, caregiver alerted")
+    box.process_scheduler_event(
+        ScheduleEvent(
+            compartment=0,
+            label="Vitamin D",
+            scheduled_hour=8,
+            minutes_overdue=35,
+            escalation="alert_caregiver",
+        )
+    )
     time.sleep(PAUSE)
 
-    # ── Scene 4: Evening dose — accidental double-take ──
-    # Patient opens compartment 2 twice, risking a double dose.
-    box.sensors.simulate_open(2)
-    box.sensors.simulate_open(2)
-    decision = box.process_medication_event(2)
-    _print_decision("18:00 — Evening dose opened twice, double-take warning",
-                    decision)
+    # ── Scene 4: Patient opens the box — vision verification ──
+    _scene_header("08:40 — Patient opens the box, verifying intake")
+    box.sensors.simulate_open(0)
+    box.process_compartment_open(0)
     time.sleep(PAUSE)
 
     print("\n" + "#" * 60)

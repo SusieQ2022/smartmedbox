@@ -88,7 +88,7 @@ class SensorArray:
                self._reed_pin,
                GPIO.RISING,
                callback=self._reed_callback,
-               bouncetime=300,
+               bouncetime=1000,
            )
 
            print(

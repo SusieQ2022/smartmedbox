@@ -127,13 +127,21 @@ class SmartMedBox:
 
         Config.validate()
 
+        print("[main] Loading sensors...")
         self.sensors = SensorArray()
+        print("[main] Loading camera...")
         self.camera = Camera()
+        print("[main] Loading LLM engine...")
         self.llm = LLMEngine()
+        print("[main] Loading voice...")
         self.voice = Voice()
+        print("[main] Loading display...")
         self.display = OLEDDisplay()
+        print("[main] Loading notifier...")
         self.notifier = Notifier()
+        print("[main] Loading store...")
         self.store = AdherenceStore()
+        print("[main] Loading scheduler...")
         self.scheduler = ReminderScheduler(self.sensors)
 
     # ------------------------------------------------------------------
@@ -413,18 +421,18 @@ class SmartMedBox:
 
         try:
            while True:
-              opened = self.sensors.poll()
+                opened = self.sensors.poll()
 
-              if opened:
-                print(f"[DEBUG] Opened compartments: {opened}")
+                if opened:
+                    print(f"[DEBUG] Opened compartments: {opened}")
+
+                for compartment in opened:
+                    self.process_compartment_open(compartment)
   
-              for event in self.scheduler.due_events():
-                self.process_scheduler_event(event)
-
-              for compartment in opened:
-                self.process_compartment_open(compartment)
+                for event in self.scheduler.due_events():
+                    self.process_scheduler_event(event)
  
-              time.sleep(0.2)
+                time.sleep(0.2)
 
         except KeyboardInterrupt:
            print("\n[main] Stopping SmartMedBox...")
