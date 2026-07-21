@@ -14,7 +14,7 @@ def test_render_dashboard_includes_summary_counts():
             "taken": 2,
             "late": 1,
             "missed": 0,
-            "double": 0,
+            "unverified": 1,
             "alerts": 1,
             "total": 4,
         },
@@ -24,12 +24,13 @@ def test_render_dashboard_includes_summary_counts():
     assert "SmartMedBox Caregiver Dashboard" in html
     assert "Today: 4 logged events" in html
     assert "<strong>2</strong>" in html
+    assert "Unverified" in html
     assert "No adherence events yet." in html
 
 
 def test_render_dashboard_escapes_event_message():
     html = render_dashboard(
-        {"taken": 0, "late": 0, "missed": 1, "double": 0, "alerts": 1, "total": 1},
+        {"taken": 0, "late": 0, "missed": 1, "unverified": 0, "alerts": 1, "total": 1},
         [
             {
                 "ts": "2026-06-30T08:35:00",
@@ -45,3 +46,16 @@ def test_render_dashboard_escapes_event_message():
 
     assert "&lt;script&gt;alert(&#x27;x&#x27;)&lt;/script&gt;" in html
     assert "<script>" not in html
+
+
+def test_render_dashboard_presents_current_vision_actions():
+    html = render_dashboard(
+        {"taken": 1, "late": 0, "missed": 0, "unverified": 1, "alerts": 0, "total": 2},
+        [
+            {"action": "confirmed", "label": "Morning"},
+            {"action": "verification_failed", "label": "Evening"},
+        ],
+    )
+
+    assert '<span class="tag confirmed">Confirmed</span>' in html
+    assert '<span class="tag verification_failed">Unverified</span>' in html

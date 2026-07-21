@@ -23,6 +23,13 @@ except ImportError:
 
 DEFAULT_DB_PATH = Config.DB_PATH
 
+# Canonical actions emitted by the current scheduler and vision pipeline.
+ACTION_DUE = "due"
+ACTION_REMIND = "remind"
+ACTION_ALERT_CAREGIVER = "alert_caregiver"
+ACTION_CONFIRMED = "confirmed"
+ACTION_VERIFICATION_FAILED = "verification_failed"
+
 
 class AdherenceStore:
     """Small SQLite wrapper for medication adherence events."""
@@ -113,21 +120,21 @@ class AdherenceStore:
             "taken": 0,
             "late": 0,
             "missed": 0,
-            "double": 0,
+            "unverified": 0,
             "alerts": 0,
             "total": len(rows),
         }
 
         for row in rows:
             action = (row["action"] or "").lower()
-            if action in ("taken", "confirm_taken"):
+            if action in (ACTION_CONFIRMED, "taken", "confirm_taken"):
                 summary["taken"] += 1
-            elif action in ("late", "remind"):
+            elif action in ("late", ACTION_REMIND):
                 summary["late"] += 1
-            elif action in ("missed", "alert_caregiver"):
+            elif action in ("missed", ACTION_ALERT_CAREGIVER):
                 summary["missed"] += 1
-            elif action in ("double", "warn_double"):
-                summary["double"] += 1
+            elif action == ACTION_VERIFICATION_FAILED:
+                summary["unverified"] += 1
 
             if row["notified"]:
                 summary["alerts"] += 1
@@ -140,7 +147,7 @@ if __name__ == "__main__":
 
     store.log_event(
         0,
-        action="confirm_taken",
+        action=ACTION_CONFIRMED,
         label="Morning",
         scheduled_hour=8,
         message="Great, your morning dose is confirmed.",

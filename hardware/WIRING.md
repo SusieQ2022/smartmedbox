@@ -1,45 +1,70 @@
 # Wiring Guide
 
-> Detailed pin assignments for the Raspberry Pi Zero 2 W. Always power off the
-> Pi before changing wiring.
+Pin assignments for the Raspberry Pi Zero 2 W. Always power off the Pi before
+changing any wiring.
 
-## HX711 weight sensors (×4)
+## Magnetic reed switch — the primary sensor
 
-Each HX711 needs a separate data (DT) and clock (SCK) pin pair:
+A small magnet sits on the compartment lid; the reed switch sits on the body.
+Opening the lid separates them and triggers the switch.
 
-| Compartment | DT (GPIO) | SCK (GPIO) |
-|-------------|-----------|------------|
-| 0 | GPIO 5  | GPIO 6  |
-| 1 | GPIO 13 | GPIO 19 |
-| 2 | GPIO 12 | GPIO 16 |
-| 3 | GPIO 20 | GPIO 21 |
+| Signal | Connection |
+|--------|------------|
+| Reed switch pin 1 | **GPIO 17** (BCM numbering) |
+| Reed switch pin 2 | GND |
 
-VCC → 3.3 V, GND → GND (shared rail).
+Configured in software as an input with the Pi's **internal pull-up** enabled,
+detecting the **falling edge** with a 300 ms debounce:
 
-## Reed switches (×4)
+```python
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.add_event_detect(17, GPIO.FALLING, callback=..., bouncetime=300)
+```
 
-Each reed switch connects between a GPIO pin and GND, using the Pi's internal
-pull-up resistor:
+No external resistor is needed — the internal pull-up handles it.
 
-| Compartment | GPIO |
-|-------------|------|
-| 0 | GPIO 17 |
-| 1 | GPIO 27 |
-| 2 | GPIO 22 |
-| 3 | GPIO 23 |
+> To add more compartments, wire one additional reed switch per compartment to
+> its own GPIO pin (e.g. 27, 22, 23) and extend `_init_hardware()` in `sensors.py`.
 
-## Other components
+## Camera
 
 | Component | Connection |
 |-----------|------------|
-| PIR motion sensor | OUT → GPIO 24, VCC → 5 V, GND → GND |
-| OLED display (I2C) | SDA → GPIO 2, SCL → GPIO 3 |
-| Speaker | via I2S DAC or USB audio adapter |
-| Camera | CSI ribbon connector |
-| Status LEDs | GPIO 25, 8, 7, 1 (with 220 Ω resistors) |
+| Pi Camera Module v2 | CSI ribbon connector |
+
+Enable the interface once with `sudo raspi-config` → Interface Options → Camera.
+
+## Audio output
+
+| Component | Connection |
+|-----------|------------|
+| PAM8403 amplifier VCC | 5 V |
+| PAM8403 GND | GND |
+| PAM8403 input | Pi audio out (I2S DAC or USB audio adapter) |
+| Speaker (3 W, 8 Ω) | PAM8403 output terminals |
+
+## OLED display (I2C)
+
+| Signal | Connection |
+|--------|------------|
+| SDA | GPIO 2 |
+| SCL | GPIO 3 |
+| VCC | 3.3 V |
+| GND | GND |
+
+## Status LEDs
+
+Each LED goes through a 220 Ω resistor to GND:
+
+| LED | GPIO |
+|-----|------|
+| Green (dose OK) | GPIO 25 |
+| Red (dose due / missed) | GPIO 8 |
 
 ## Safety notes
 
-- Use a common ground rail for all sensors.
-- Do not exceed the Pi's 3.3 V logic levels on GPIO inputs.
-- Calibrate each load cell after assembly (see `sensors.py` calibration notes).
+- Use a common ground rail for all components.
+- Never exceed 3.3 V on any GPIO input.
+- Insulate solder joints with heat-shrink tubing and secure loose wires inside
+  the enclosure so nothing shifts during handling.
