@@ -28,12 +28,8 @@ simulation of medication events.
 from __future__ import annotations
 
 import textwrap
-
-from luma.core.interface.serial import i2c
-from luma.core.render import canvas
-from luma.oled.device import sh1106
-from PIL import ImageFont
 import time
+
 from config import Config
 from sensors import SensorArray
 from camera import Camera
@@ -43,6 +39,11 @@ from notifier import Notifier
 from store import AdherenceStore
 from scheduler import ReminderScheduler, ScheduleEvent
 from datetime import date, datetime
+
+from luma.core.interface.serial import i2c
+from luma.core.render import canvas
+from luma.oled.device import sh1106
+from PIL import ImageFont
 
 class OLEDDisplay:
     """Controls the SH1106 OLED display at I2C address 0x3C."""
@@ -202,7 +203,7 @@ class SmartMedBox:
         )
 
         # Give the user time to take the pill out
-        time.sleep(20)
+        time.sleep(10)
     
         # ----------------------------------------------------------
         # Capture image
@@ -210,7 +211,7 @@ class SmartMedBox:
         
         image_path = self.camera.capture()
         print(f"[camera] Photo captured: {image_path}")
-        #image_b64 = Camera.encode_base64(image_path)
+        image_b64 = Camera.encode_base64(image_path)
 
         if image_b64 is None:
             print("[camera] Failed to capture image.")
@@ -220,81 +221,84 @@ class SmartMedBox:
         # Vision verification
         # ----------------------------------------------------------
 
-        #context = {
-            #"compartment": compartment,
-            #"label": medication.label,
-            #"open_count": state.open_count,
-        #}
-        #result = self.llm.verify_intake(
-            #context=context,
-            #image_b64=image_b64,
-        #)
+        context = {
+            "compartment": compartment,
+            "label": medication.label,
+            "open_count": state.open_count,
+        }
+        result = self.llm.verify_intake(
+            context=context,
+            image_b64=image_b64,
+        )
 
         # ----------------------------------------------------------
         # Medication confirmed
         # ----------------------------------------------------------
 
-        #if result.visually_confirmed:
-            #self.scheduler.mark_completed(compartment,medication.scheduled_hour)
-            #self.display = OLEDDisplay()
-            #state.taken_today = True
-            #self.voice.speak(
-                #result.message or ""
-            #)
+        if result.visually_confirmed:
+            self.scheduler.mark_completed(compartment,medication.scheduled_hour)
+            self.display.show_message(
+                "Medication taken",
+                "Successfully recorded",
+            )
+            state.taken_today = True
+            self.voice.speak(
+                result.message or ""
+            )
 
-            #self.store.log_event(
+            self.store.log_event(
 
-                #compartment=compartment,
-                #action="confirmed",
-                #message=result.message or "",
-                #label=medication.label,
-                #scheduled_hour=medication.scheduled_hour,
+                compartment=compartment,
+                action="confirmed",
+                message=result.message or "",
+                label=medication.label,
+                scheduled_hour=medication.scheduled_hour,
 
-            #)
+            )
 
         # ----------------------------------------------------------
         # Medication NOT confirmed
         # ----------------------------------------------------------
 
-        #else:
-            #self.voice.speak(
-                #result.message or ""
-            #)
-            #self.store.log_event(
-                #compartment=compartment,
-                #action="verification_failed",
-                #message=result.message or "",
-                #label=medication.label,
-                #scheduled_hour=medication.scheduled_hour,
-            #)
+        else:
+            self.voice.speak(
+                result.message or ""
+            )
+            self.store.log_event(
+                compartment=compartment,
+                action="verification_failed",
+                message=result.message or "",
+                label=medication.label,
+                scheduled_hour=medication.scheduled_hour,
+            )
 
         # ----------------------------------------------------------
         # Temporary validation solution
         # ----------------------------------------------------------
         
-        self.scheduler.mark_completed(
-            compartment,
-            medication.scheduled_hour,
-        )
+        # self.scheduler.mark_completed(
+        #     compartment,
+        #     medication.scheduled_hour,
+        # )
 
-        state.taken_today = True
+        # state.taken_today = True
 
-        confirmation_message = "Medicine finally taken."
+        # confirmation_message = "Medicine finally taken."
 
-        self.voice.speak(confirmation_message)
+        # self.voice.speak(confirmation_message)
 
-        self.display.show_message(
-            "Medicine finally taken",
-            "Successfully recorded",
-        )
+        # self.display.show_message(
+        #     "Medicine finally taken",
+        #     "Successfully recorded",
+        # )
 
-        self.store.log_event(
-            compartment=compartment,
-            action="confirmed",
-            message=confirmation_message,
-            label=medication.label,
-            scheduled_hour=medication.scheduled_hour,
-        )
+        # self.store.log_event(
+        #     compartment=compartment,
+        #     action="confirmed",
+        #     message=confirmation_message,
+        #     label=medication.label,
+        #     scheduled_hour=medication.scheduled_hour,
+        # )
 
         # ----------------------------------------------------------
         # Debug output

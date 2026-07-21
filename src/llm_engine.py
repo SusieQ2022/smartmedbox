@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 # ----------------------------------------------------------------------
 
 @dataclass
-@dataclass
 class ReasoningResult:
     message: str | None = None
     visually_confirmed: bool | None = None
