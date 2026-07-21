@@ -448,8 +448,9 @@ class SmartMedBox:
                 for compartment in closed:
                     self.process_compartment_close(compartment)
   
-                for event in self.scheduler.due_events():
-                    self.process_scheduler_event(event)
+                if not opened and not closed:
+                    for event in self.scheduler.due_events():
+                        self.process_scheduler_event(event)
  
                 time.sleep(0.2)
 
