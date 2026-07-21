@@ -198,6 +198,13 @@ class LLMEngine:
 
             output_text = "\n".join(lines).strip()
 
+        # Fix Python-style literals that are not valid JSON
+        output_text = output_text.replace(": none", ": null")
+        output_text = output_text.replace(":none", ": null")
+        output_text = output_text.replace(": None", ": null")
+        output_text = output_text.replace(": True", ": true")
+        output_text = output_text.replace(": False", ": false")
+
         try:
             payload = json.loads(output_text)
         except json.JSONDecodeError:

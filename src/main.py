@@ -212,7 +212,6 @@ class SmartMedBox:
 
         # Give the user time to take the pill out
         time.sleep(10)
-
     def process_compartment_close(self, compartment: int) -> None:
         """
         Handle the medication box being closed.
@@ -222,6 +221,8 @@ class SmartMedBox:
         """
         print(f"[main] Compartment {compartment} closed — shutting down display.")
         self.display.clear()
+
+        
     
         # ----------------------------------------------------------
         # Capture image
@@ -414,6 +415,10 @@ class SmartMedBox:
             elif command == "refill":
                 self.sensors.simulate_refill(compartment)
                 print("Medication compartment reset.")
+            
+            elif command == "close":
+                self.sensors.simulate_close(compartment)
+                self.process_compartment_close(compartment)
 
             else:
                 print("Unknown command.")
@@ -438,11 +443,10 @@ class SmartMedBox:
 
                 for compartment in opened:
                     self.process_compartment_open(compartment)
-
+                
                 closed = self.sensors.poll_closed()
                 for compartment in closed:
                     self.process_compartment_close(compartment)
-
   
                 for event in self.scheduler.due_events():
                     self.process_scheduler_event(event)
