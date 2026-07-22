@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 # ----------------------------------------------------------------------
 
 @dataclass
-@dataclass
 class ReasoningResult:
     message: str | None = None
     visually_confirmed: bool | None = None
@@ -198,6 +197,13 @@ class LLMEngine:
                 lines = lines[:-1]
 
             output_text = "\n".join(lines).strip()
+
+        # Fix Python-style literals that are not valid JSON
+        output_text = output_text.replace(": none", ": null")
+        output_text = output_text.replace(":none", ": null")
+        output_text = output_text.replace(": None", ": null")
+        output_text = output_text.replace(": True", ": true")
+        output_text = output_text.replace(": False", ": false")
 
         try:
             payload = json.loads(output_text)

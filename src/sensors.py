@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from typing import Dict
 
 from config import Config
+import time
+import RPi.GPIO as GPIO
 
 
 @dataclass
@@ -19,8 +21,9 @@ class CompartmentState:
     index: int
     open_count: int = 0
     last_processed_open_count: int = 0
+    close_count: int = 0
+    last_processed_close_count: int = 0
     taken_today: bool = False  # whether this dose was already taken today
-
 
 
 class SensorArray:
@@ -31,10 +34,14 @@ class SensorArray:
     switches. In mock mode it generates plausible fake readings.
     """
 
-    def __init__(self, num_compartments: int | None = None):
+    def __init__(self, num_compartments: int = 1) -> None:
         self.num_compartments = num_compartments or Config.NUM_COMPARTMENTS
         self.mock = Config.is_mock()
         self.compartments: Dict[int, CompartmentState] = {}
+
+        # Physical pin 11 = BCM GPIO17
+        self._reed_pin = 17
+
         self._init_compartments()
 
         if not self.mock:
@@ -47,33 +54,59 @@ class SensorArray:
             self.compartments[index] = CompartmentState(index=index)
 
     def _init_hardware(self) -> None:
-        """Initialise Raspberry Pi GPIO and reed switch."""
+        """Initialize the reed switch GPIO safely."""
 
-        import RPi.GPIO as GPIO
+        GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
 
-        self._gpio = GPIO
-
-        # Single reed switch connected to GPIO17
-        self._reed_pin = 17
-
+        # Configure reed-switch pin as an input.
+        # PUD_UP means the pin is HIGH when the switch is open
+        # and LOW when the magnet closes the switch.
         GPIO.setup(
             self._reed_pin,
             GPIO.IN,
             pull_up_down=GPIO.PUD_UP,
         )
 
-        GPIO.add_event_detect(
-            self._reed_pin,
-            GPIO.FALLING,
-            callback=self._reed_callback,
-            bouncetime=300,
-        )
+        initial_state = GPIO.input(self._reed_pin)
 
+        # Remove any old detector left on this pin.
+        try:
+           GPIO.remove_event_detect(self._reed_pin)
+        except (RuntimeError, ValueError):
+           pass
+
+        # Small delay allows the GPIO state to settle.
+        time.sleep(0.2)
+
+        try:
+           GPIO.add_event_detect(
+               self._reed_pin,
+               GPIO.BOTH,
+               callback=self._reed_callback,
+               bouncetime=1000,
+           )
+
+           print(
+               f"[sensors] Reed-switch monitoring enabled "
+               f"on GPIO {self._reed_pin}."
+           )
+        except RuntimeError as error:
+           print(f"[sensors] Failed to initialize reed switch: {error}")
+           raise
 
     def _reed_callback(self, channel: int) -> None:
-        """Called whenever the reed switch is triggered."""
-        self.compartments[0].open_count += 1
+        """Called whenever the reed switch changes state."""
+        state = GPIO.input(self._reed_pin)
+
+        if state == GPIO.HIGH:
+            # Magnet moved away → lid opened
+            print(f"[sensors] Reed switch OPENED on GPIO {channel}")
+            self.compartments[0].open_count += 1
+        else:
+            # Magnet returned → lid closed
+            print(f"[sensors] Reed switch CLOSED on GPIO {channel}")
+            self.compartments[0].close_count += 1
     
     def poll(self) -> list[int]:
         """
@@ -85,15 +118,26 @@ class SensorArray:
         list[int]
             Indices of compartments with a newly detected opening event.
         """
-        opened = []
+        opened: list[int] = []
         for index, state in self.compartments.items():
             # Detect a NEW opening event
             if state.open_count > state.last_processed_open_count:
-                opened.append(index)
                 # Mark this opening as processed
                 state.last_processed_open_count = state.open_count
+                opened.append(index)
 
         return opened
+    
+    def poll_closed(self) -> list[int]:
+        """
+        Return compartments that have been closed since the last poll.
+        """
+        closed: list[int] = []
+        for index, state in self.compartments.items():
+            if state.close_count > state.last_processed_close_count:
+                state.last_processed_close_count = state.close_count
+                closed.append(index)
+        return closed
 
 
     # ── Mock helpers (used by the simulator / tests only) ──
@@ -113,3 +157,20 @@ class SensorArray:
         if index in self.compartments:
             self.compartments[index].open_count = 0
 
+    def cleanup(self) -> None:
+        """Release GPIO resources."""
+
+        if self.mock:
+            return
+
+        try:
+            GPIO.remove_event_detect(self._reed_pin)
+        except Exception:
+            pass
+
+        try:
+            GPIO.cleanup()
+        except Exception:
+            pass
+
+        print("[sensors] GPIO cleaned up.")

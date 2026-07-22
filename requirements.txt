@@ -8,6 +8,10 @@ RPi.GPIO>=0.7.1 ; platform_machine == "armv7l" or platform_machine == "aarch64"
 hx711>=1.1.2 ; platform_machine == "armv7l" or platform_machine == "aarch64"
 picamera2>=0.3.12 ; platform_machine == "armv7l" or platform_machine == "aarch64"
 
+# ── Display (OLED via luma) ──
+luma.core>=2.4.0
+luma.oled>=3.13.0
+
 # ── Voice / Audio ──
 pyttsx3>=2.90
 gTTS>=2.5.0
