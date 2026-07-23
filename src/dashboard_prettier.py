@@ -9,16 +9,12 @@ The dashboard reads the same SQLite event log written by store.py/main.py.
 It shows structured decisions only; raw camera images are not stored or served.
 """
 
-import mimetypes
-from pathlib import Path
 from argparse import ArgumentParser
 from datetime import datetime
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Dict, List
 from urllib.parse import urlparse
-
-CAPTURES_DIR = Path("/home/pi/smartmedbox/captures")
 
 try:
     from .config import Config
@@ -57,7 +53,7 @@ ACTION_PRESENTATION = {
 
 def render_dashboard(summary: Dict[str, int], events: List[Dict]) -> str:
     """Render the caregiver dashboard as a single HTML page."""
-    newest_first = events
+    newest_first = list(reversed(events))
     latest = newest_first[0] if newest_first else None
 
     taken = int(summary.get("taken", 0))
@@ -244,18 +240,6 @@ def render_dashboard(summary: Dict[str, int], events: List[Dict]) -> str:
       max-width: 92%;
       position: relative;
       z-index: 1;
-    }}
-
-    .latest-image-wrap {{
-      margin: 16px 0;
-    }}
-
-    .latest-image {{
-      width: 100%;
-      max-height: 260px;
-      object-fit: cover;
-      border-radius: 12px;
-      border: 1px solid #dbe5ef;
     }}
 
     .adherence-card {{
@@ -554,17 +538,8 @@ def _render_latest_event(event: Dict | None) -> str:
     {escape(date_text)} at {escape(time_text)}
     &nbsp;·&nbsp;
     <span class="tag {action_class}">{escape(action_label)}</span>
-</div>
-
-<div class="latest-image-wrap">
-    <img
-        src="/latest-image?t={event.get('id','')}"
-        class="latest-image"
-        alt="Latest Capture"
-        onerror="this.parentElement.style.display='none';">
-</div>
-
-<p class="latest-message">{message}</p>
+  </div>
+  <p class="latest-message">{message}</p>
 </div>"""
 
 
@@ -577,17 +552,7 @@ def _render_event_row(event: Dict) -> str:
     label = escape(str(event.get("label") or f"Compartment {event.get('compartment', '')}"))
     message = escape(str(event.get("message") or ""))
     date_text, time_text = _parse_timestamp(event.get("ts"))
-
     overdue = int(event.get("minutes_overdue") or 0)
-    if overdue <= 0:
-        overdue_display = "0 min"
-    elif overdue < 60:
-        overdue_display = f"{overdue} min"
-    else:
-        hours = overdue // 60
-        minutes = overdue % 60
-        overdue_display = f"{hours}h {minutes}m"
-
     notified = bool(event.get("notified"))
     alert_text = "Yes" if notified else "No"
     alert_class = "alert-yes" if notified else "alert-no"
@@ -598,28 +563,10 @@ def _render_event_row(event: Dict) -> str:
   <td>{escape(time_text)}</td>
   <td>{label}</td>
   <td><span class="tag {action_class}">{escape(action_label)}</span></td>
-  <td>{overdue_display}</td>
+  <td>{overdue} min</td>
   <td class="{alert_class}">{alert_text}</td>
   <td>{message}</td>
 </tr>"""
-
-
-def _latest_capture_path() -> Path | None:
-    """Return the newest captured image, or None if no image exists."""
-    if not CAPTURES_DIR.exists():
-        return None
-
-    images = [
-        path
-        for path in CAPTURES_DIR.iterdir()
-        if path.is_file()
-        and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
-    ]
-
-    if not images:
-        return None
-
-    return max(images, key=lambda path: path.stat().st_mtime)
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -627,39 +574,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     store_path = Config.DB_PATH
 
-    def do_GET(self):
-        if self.path.split("?", 1)[0] == "/latest-image":
-            image_path = _latest_capture_path()
-
-            if image_path is None:
-                self.send_error(404, "No captured image available")
-                return
-
-            try:
-                image_data = image_path.read_bytes()
-                content_type, _ = mimetypes.guess_type(str(image_path))
-
-                self.send_response(200)
-                self.send_header(
-                    "Content-Type",
-                    content_type or "image/jpeg",
-                )
-                self.send_header("Content-Length", str(len(image_data)))
-                self.send_header("Cache-Control", "no-store, max-age=0")
-                self.end_headers()
-                self.wfile.write(image_data)
-                return
-
-            except OSError:
-                self.send_error(500, "Could not load captured image")
-                return
+    def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path not in ("/", "/index.html"):
             self.send_error(404)
             return
 
         store = AdherenceStore(self.store_path)
-        html = render_dashboard(store.summary_today(), store.recent_events(limit=300))
+        html = render_dashboard(store.summary_today(), store.events_today())
         body = html.encode("utf-8")
 
         self.send_response(200)

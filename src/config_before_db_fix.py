@@ -43,7 +43,7 @@ class Config:
     NUM_COMPARTMENTS: int = int(os.getenv("NUM_COMPARTMENTS", "4"))
     LANGUAGE: str = os.getenv("LANGUAGE", "en")
     REMINDER_INTERVAL_MIN: int = int(os.getenv("REMINDER_INTERVAL_MIN", "10"))
-    DB_PATH: str = os.getenv("SMARTMEDBOX_DB",  "/home/pi/smartmedbox/smartmedbox.db",)
+    DB_PATH: str = os.getenv("SMARTMEDBOX_DB", "smartmedbox.db")
     SMARTMEDBOX_DB: str = DB_PATH
 
     # ── Hardware mode ──

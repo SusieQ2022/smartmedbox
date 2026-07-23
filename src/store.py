@@ -115,7 +115,7 @@ class AdherenceStore:
 
     def summary_today(self) -> Dict[str, int]:
         """Count today's events by the categories caregivers care about."""
-        rows = self.events_today()
+        rows = self.recent_events(limit=100000)
         summary = {
             "taken": 0,
             "late": 0,
