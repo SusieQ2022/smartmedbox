@@ -12,7 +12,6 @@ from typing import Dict
 
 from config import Config
 import time
-import RPi.GPIO as GPIO
 
 
 @dataclass
@@ -55,7 +54,8 @@ class SensorArray:
 
     def _init_hardware(self) -> None:
         """Initialize the reed switch GPIO safely."""
-
+        global GPIO
+        import RPi.GPIO as GPIO
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
 
