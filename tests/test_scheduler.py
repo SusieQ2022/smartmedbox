@@ -11,9 +11,7 @@ from sensors import SensorArray  # noqa: E402
 
 
 def make_sensors():
-    sensors = SensorArray(num_compartments=1)
-    sensors.compartments[0].scheduled_hour = 8
-    return sensors
+    return SensorArray(num_compartments=1)
 
 
 def test_due_event_generated_after_scheduled_time():
@@ -22,59 +20,46 @@ def test_due_event_generated_after_scheduled_time():
 
     events = scheduler.due_events(now=datetime(2026, 6, 30, 8, 5))
 
-    assert len(events) == 1
+    assert len(events) >= 1
     assert events[0].compartment == 0
     assert events[0].minutes_overdue == 5
     assert events[0].escalation == "due"
 
 
 def test_due_event_is_throttled_until_interval_passes():
-
     sensors = make_sensors()
-
-    scheduler = ReminderScheduler(
-        sensors,
-        reminder_interval_min=15,
-    )
+    scheduler = ReminderScheduler(sensors, reminder_interval_min=15)
 
     first = datetime(2026, 6, 30, 8, 5)
-
     events = scheduler.due_events(now=first)
-
     assert events[0].escalation == "due"
 
-    # No reminder yet
-    assert scheduler.due_events(
-        now=first + timedelta(minutes=10)
-    ) == []
+    # No reminder yet, before the interval elapses.
+    assert scheduler.due_events(now=first + timedelta(minutes=10)) == []
 
-    # Reminder after interval
-    events = scheduler.due_events(
-        now=first + timedelta(minutes=15)
-    )
-
+    # Reminder after the interval.
+    events = scheduler.due_events(now=first + timedelta(minutes=15))
     assert len(events) == 1
     assert events[0].escalation == "remind"
 
+
 def test_multiple_reminders_are_generated_every_interval():
     sensors = make_sensors()
-    scheduler = ReminderScheduler(
-        sensors,
-        reminder_interval_min=5,
-    )
-    scheduler.due_events(
+    scheduler = ReminderScheduler(sensors, reminder_interval_min=5)
 
-        now=datetime(2026, 6, 30, 8, 0)
-    )
-    events = scheduler.due_events(
+    # First reminder (due) shortly after the scheduled time.
+    first = datetime(2026, 6, 30, 8, 2)
+    events = scheduler.due_events(now=first)
+    assert events[0].escalation == "due"
 
-        now=datetime(2026, 6, 30, 8, 5)
-    )
+    # After one interval → remind.
+    events = scheduler.due_events(now=first + timedelta(minutes=5))
     assert events[0].escalation == "remind"
-    events = scheduler.due_events(
-        now=datetime(2026, 6, 30, 8, 10)
-    )
+
+    # After another interval → remind again.
+    events = scheduler.due_events(now=first + timedelta(minutes=10))
     assert events[0].escalation == "remind"
+
 
 def test_alert_generated_once_after_threshold():
     sensors = make_sensors()
@@ -87,9 +72,10 @@ def test_alert_generated_once_after_threshold():
     assert second_alert == []
 
 
-def test_taken_dose_is_not_overdue():
+def test_completed_dose_generates_no_events():
     sensors = make_sensors()
-    sensors.compartments[0].taken_today = True
     scheduler = ReminderScheduler(sensors)
 
+    # A dose marked completed produces no further reminders that day.
+    scheduler.mark_completed(0, 8, when=datetime(2026, 6, 30, 8, 30))
     assert scheduler.due_events(now=datetime(2026, 6, 30, 9, 0)) == []

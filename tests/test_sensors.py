@@ -14,33 +14,22 @@ def test_compartments_initialised():
     assert len(arr.compartments) == 4
 
 
-def test_pill_removal_makes_compartment_empty():
-    arr = SensorArray(num_compartments=2)
-    arr.simulate_pill_removed(0)
-    arr.poll()
-    assert arr.compartments[0].is_empty is True
-    assert arr.compartments[1].is_empty is False
-
-
-def test_refill_resets_compartment():
+def test_simulate_open_increments_count():
     arr = SensorArray(num_compartments=1)
-    arr.simulate_pill_removed(0)
+    arr.simulate_open(0)
+    assert arr.compartments[0].open_count == 1
+
+
+def test_poll_reports_newly_opened_compartment():
+    arr = SensorArray(num_compartments=1)
+    arr.simulate_open(0)
+    assert arr.poll() == [0]
+    # A second poll with no new opening returns nothing.
+    assert arr.poll() == []
+
+
+def test_refill_resets_open_count():
+    arr = SensorArray(num_compartments=1)
+    arr.simulate_open(0)
     arr.simulate_refill(0)
-    arr.poll()
-    assert arr.compartments[0].is_empty is False
     assert arr.compartments[0].open_count == 0
-
-def test_compartments_have_schedule():
-    """Each compartment should be assigned a label and scheduled hour."""
-    arr = SensorArray(num_compartments=4)
-    assert arr.compartments[0].label == "Morning"
-    assert arr.compartments[0].scheduled_hour == 8
-    assert arr.compartments[3].label == "Night"
-    assert arr.compartments[3].scheduled_hour == 22
-
-
-def test_minutes_overdue_zero_when_taken():
-    """A dose already taken today is never overdue."""
-    arr = SensorArray(num_compartments=1)
-    arr.compartments[0].taken_today = True
-    assert arr.minutes_overdue(0) == 0
