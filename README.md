@@ -87,7 +87,7 @@ Two independent lines: the **reminder line** is time-driven and deterministic; t
 ### Quick start (laptop, no hardware needed)
 
 ```bash
-git clone https://github.com/<your-org>/smartmedbox.git
+git clone https://github.com/SusieQ2022/smartmedbox.git
 cd smartmedbox
 
 python3 -m venv venv
@@ -100,7 +100,10 @@ cp .env.example .env
 # fallback keeps the reminder flow fully functional offline).
 # Keep HARDWARE_MODE=mock to run on a laptop.
 
-python src/main.py
+python src/main.py          
+# interactive demo (type: due, remind, alert, open, refill, quit)
+python src/simulator.py     # automated end-to-end demo, no typing needed
+python -m pytest tests/ -v  # run the test suite (21 tests)
 ```
 
 ### Interactive commands
