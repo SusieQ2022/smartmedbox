@@ -77,10 +77,10 @@ network. `main.py` / `simulator.py` and `dashboard.py` must share the same
 
 ---
 
-## 2. Hardware mode (Raspberry Pi Zero 2 W)
+## 2. Hardware mode (Raspberry Pi Zero W)
 
 ### Prerequisites
-- Raspberry Pi Zero 2 W with Raspberry Pi OS (Bookworm or newer)
+- Raspberry Pi Zero 2 with Raspberry Pi OS (Bookworm or newer)
 - Components wired per [`../hardware/WIRING.md`](../hardware/WIRING.md) — reed switch on **GPIO 17**
 - Network access (for the Ki:connect API)
 
