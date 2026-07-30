@@ -67,20 +67,50 @@ python -m pytest tests/ -v
 
 ### Caregiver dashboard
 
+The dashboard is a standalone web view of the adherence event log. It works
+**independently of the hardware** — it simply reads the SQLite database written
+by `main.py` or `simulator.py`, so it runs in mock mode on a laptop too.
+
+**Step 1 — generate some events** (in one terminal):
+
+```bash
+python src/simulator.py          # writes the demo scenario to the database
+# or run python src/main.py and use the due / open / alert commands
+```
+
+**Step 2 — start the dashboard** (in a second terminal):
+
 ```bash
 python src/dashboard.py --host 0.0.0.0 --port 8000
 ```
 
-Then open `http://<your-computer-ip>:8000` — reachable from a phone on the same
-network. `main.py` / `simulator.py` and `dashboard.py` must share the same
-`SMARTMEDBOX_DB` path so events show up.
+**Step 3 — open it in a browser:**
+
+- On the same computer: `http://localhost:8000`
+- From a phone on the same Wi-Fi: `http://<your-computer-ip>:8000`
+
+The page auto-refreshes every 10 seconds and shows:
+
+- **Summary metrics** at the top — Taken, Late, Missed, Unverified, Alerts.
+- **An event table** — each row is one logged event with its timestamp, dose,
+  outcome (Due / Reminder / Caregiver alert / Confirmed / Unverified), how
+  overdue it was, whether the caregiver was alerted, and the spoken message.
+
+> **Important — shared database:** `dashboard.py` and whatever writes the events
+> (`main.py` / `simulator.py`) must point at the **same** `SMARTMEDBOX_DB` path,
+> or the dashboard will show an empty page. Running everything from the
+> repository root uses the same default (`smartmedbox.db`) automatically; on the
+> Pi, set `SMARTMEDBOX_DB` to an absolute path in `.env`.
+>
+> Privacy note: only structured decisions are stored and served — raw camera
+> images are never saved or shown.
 
 ---
 
 ## 2. Hardware mode (Raspberry Pi Zero W)
 
 ### Prerequisites
-- Raspberry Pi Zero 2 with Raspberry Pi OS (Bookworm or newer)
+- Raspberry Pi Zero W with Raspberry Pi OS (Bookworm or newer)
 - Components wired per [`../hardware/WIRING.md`](../hardware/WIRING.md) — reed switch on **GPIO 17**
 - Network access (for the Ki:connect API)
 

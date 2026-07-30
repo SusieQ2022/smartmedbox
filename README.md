@@ -73,7 +73,7 @@ Existing smart pill boxes only *remind* — they beep or send a notification, bu
 │              │ store (SQLite)        │  + log every event              │
 │              └───────────────────────┘                                 │
 └────────────────────────────────────────────────────────────────────────┘
-                        Raspberry Pi Zero 2 W
+                        Raspberry Pi Zero W
 ```
 
 Two independent lines: the **reminder line** is time-driven and deterministic; the **verification line** is event-driven and vision-based. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for details.
@@ -131,7 +131,15 @@ Plays the full scenario hands-free: escalation from `due` → `remind` → `aler
 python -m pytest tests/ -v
 ```
 
----
+### Caregiver dashboard
+
+Run the simulator (or `main.py`) to generate events, then in a second terminal:
+
+```bash
+python src/dashboard.py --host 0.0.0.0 --port 8000
+```
+
+Open `http://localhost:8000` — a live view of adherence events, reachable from a phone on the same network. 
 
 ## 📁 Repository Structure
 
@@ -164,7 +172,7 @@ smartmedbox/
 
 See [`hardware/PARTS_LIST.md`](hardware/PARTS_LIST.md) for the bill of materials and [`hardware/WIRING.md`](hardware/WIRING.md) for wiring.
 
-**Core components:** Raspberry Pi Zero 2 W · Magnetic reed switch (GPIO 17) · Pi Camera Module v2 · Speaker + PAM8403 amplifier · OLED display · Status LEDs.
+**Core components:** Raspberry Pi Zero W · Magnetic reed switch (GPIO 17) · Pi Camera Module v2 · Speaker + PAM8403 amplifier · OLED display · Status LEDs.
 
 > **Note:** the project originally explored load-cell weight sensing. This was dropped in favour of a focused reed-switch + camera approach — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#design-decisions).
 
@@ -176,7 +184,7 @@ This project is graded individually. Every member contributed across hardware, c
 
 | Member | Primary Work Package |
 |--------|---------------------|
-| [Name 1] | Hardware assembly & sensor wiring |
+| [Shuzhen Liu] | Demo simulator + tests, mock-mode restoration and test cleanup,     medication scheduling logic, full project documentation, first-draft presentations; hardware: support. |
 | [Name 2] | LLM engine, vision verification & prompt engineering |
 | [Name 3] | Scheduler, SQLite store & caregiver dashboard |
 | [Name 4] | Demo simulator, tests & documentation |
