@@ -11,7 +11,7 @@
 
 | Member | GitHub | Primary focus |
 |--------|--------|---------------|
-| [Shuzhen Liu] | [@SusieQ2022] | Demo simulator, tests, documentation |
+| Shuzhen Liu | [@SusieQ2022] | Demo simulator, tests, documentation |
 | [Name 1] | [@handle] | Hardware assembly & sensor integration |
 | [Name 2] | [@Ppkhanh] | LLM engine, vision verification, prompt engineering |
 | [Name 3] | [@Waqar] | Scheduler, SQLite store, caregiver dashboard |
@@ -23,7 +23,7 @@
 
 | Member | Hardware | Code | Report | Presentation |
 |--------|----------|------|--------|--------------|
-| **[Shuzhen Liu]** | Support | Lead: `simulator.py`, test suite, mock-mode restoration, medication schedule logic, documentation | Lead: documentation & report | Lead: first-version slides & Technology section |
+| **Shuzhen Liu** | Support | Lead: `simulator.py`, test suite, mock-mode restoration, medication schedule logic, documentation | Lead: documentation & report | Lead: first-version slides & Technology section |
 | **[Name 1]** | Lead: wiring speaker, camera, display & reed switch; enclosure assembly | Hardware testing & GPIO validation | Hardware section | Demo operation |
 | **[Name 2]** | Support | Lead: `llm_engine.py`, vision intake verification, Ki:connect integration, scheduler/LLM refactor, `main.py` | Reasoning / AI section | AI explanation |
 | **[Name 3]** | Support | Lead: `scheduler.py`, `store.py`, `dashboard.py`, caregiver pipeline | Data & escalation section | Business / market |
@@ -31,7 +31,7 @@
 
 ## Detailed deliverables
 
-### [Shuzhen Liu] — Simulator, tests & documentation
+### Shuzhen Liu — Simulator, tests & documentation
 - Built `simulator.py` — automated hands-free demo of the full escalation and
   verification flow, with a deterministic mode so safety-critical behaviours
   (caregiver alert) demo reliably without live LLM variability; rewrote it after
