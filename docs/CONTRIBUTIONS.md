@@ -97,9 +97,7 @@
   subscription-locked dispensers. Pressure-tested component, API and scaling
   assumptions against the actual prototype parts list.
 - Detailed Financial Planning and three year plan.
-- Presentation: caregiver data flow and dashboard, revenue streams, financial
-  projections and viability, key activities, and supporting Q&A on API costs,
-  subscription assumptions and at-scale component costs.
+- Presentation: financial projections and viability, subscription assumptions and at-scale component costs, key activities and revenue stream.
   
 
 
