@@ -66,15 +66,42 @@
 - Refactored the engine so the scheduler owns escalation and the LLM only phrases messages.
 - Restructured `main.py` around the two-line architecture; added the pre-capture prompt + delay.
 
-### [Name 3] — Data & scheduling
-- Built `scheduler.py`: fixed medication schedule, overdue calculation, three-level escalation.
-- Built `store.py` (SQLite adherence log) and `dashboard.py` (caregiver view).
-- Implemented the caregiver notification pipeline.
-- Aligned event names across `main.py`, `store.py` and `dashboard.py`; added dashboard reachability from a phone.
-
 ### [Name 4] — Integration & business
-- Business Model Canvas, market analysis and financial plan.
+- Business Model Canvas
 - Presentation coordination and delivery.
+
+### [Waqar Khowaja] — Caregiver data, scheduling safety, Business Model (Market Sizing, Positioning,  Financial Planning)
+- Designed and implemented the original `scheduler.py`: fixed medication
+  scheduling, overdue calculation and deterministic escalation from `due` to
+  `remind` to `alert_caregiver`.
+- Built `store.py`, the SQLite adherence-data layer used to record medication
+  events, reminders, verification outcomes, overdue duration and caregiver
+  alerts. 
+- Built the original `dashboard.py`: a lightweight standard-library caregiver
+  dashboard showing adherence history, Taken/Late/Missed/Unverified metrics,
+  alert status and LLM-generated messages. Added automatic refresh, responsive
+  phone layouts and network access from another device on the Pi's local
+  network. Maheen later improved and deployed that.
+- Integrated and stabilized the caregiver pipeline across `main.py`,
+  `config.py`, `store.py`, `dashboard.py` and the simulator. Introduced a shared
+  database configuration, aligned the event vocabulary
+  (`due`, `remind`, `alert_caregiver`, `confirmed`,
+  `verification_failed`) and ensured simulator fallback events also populate
+  the dashboard.
+- Owned the business-viability analysis: developed the unit economics, pricing
+  and revenue model, production-scale cost assumptions and three-year financial
+  projection, including the device, consumer subscription and B2B caregiver
+  dashboard revenue streams.
+- Conducted German care-market sizing and competitor benchmarking, positioning
+  SmartMedBox between basic reminder products and expensive
+  subscription-locked dispensers. Pressure-tested component, API and scaling
+  assumptions against the actual prototype parts list.
+- Detailed Financial Planning and three year plan.
+- Presentation: caregiver data flow and dashboard, revenue streams, financial
+  projections and viability, key activities, and supporting Q&A on API costs,
+  subscription assumptions and at-scale component costs.
+  
+
 
 ## Verifying contributions in Git
 
