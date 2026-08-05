@@ -19,8 +19,9 @@
 
 ## Detailed deliverables
 
-### Shuzhen Liu — Simulator, tests & documentation
-- Built `simulator.py` — automated hands-free demo of the full escalation and
+### Shuzhen Liu — Software development, Repository architecture, simulator & testing, mock-mode restoration, documentation
+- Set up the initial repository and project scaffolding (structure, config, base modules, git setup).
+- Built `simulator.py`: automated hands-free demo of the full escalation and
   verification flow, with a deterministic mode so safety-critical behaviours
   (caregiver alert) demo reliably without live LLM variability; rewrote it after
   the scheduler/LLM refactor to match the new two-line architecture.
@@ -28,10 +29,10 @@
   calling the live LLM instead of the rule-based path; fixed a syntax error that
   broke the entire suite; cleaned up and updated tests after the architecture
   refactor (removed tests for deleted APIs, updated scheduler tests to match new
-  behaviour) — 21 tests passing.
+  behaviour): 21 tests passing.
 - Implemented the original medication schedule and overdue calculation in
   `sensors.py` (later migrated into `scheduler.py` during the refactor).
-- Restored mock mode after hardware integration broke laptop execution — moved
+- Restored mock mode after hardware integration broke laptop execution: moved
   `RPi.GPIO`, `luma` and `picamera2` imports to lazy hardware-only paths so the
   full application runs on any laptop without a Raspberry Pi attached.
 - Wrote and maintained all project documentation: `README.md`, `ARCHITECTURE.md`,
@@ -41,7 +42,7 @@
   plan presentation and final presentation, then distributed sections to teammates
   to adapt their own parts.
 - Presentation: technology section (architecture + stack).
-- Final Report: the first draft of the final report; report: Sections 1, 2 and 8.
+- Final Report: authored the first draft; Sections 1, 2 and 8.
 - Hardware: support.
 
 ### [Name 1] — Hardware
