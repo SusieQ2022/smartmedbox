@@ -11,7 +11,7 @@
 
 | Member | Hardware | Code | Report | Presentation |
 |--------|----------|------|--------|--------------|
-| **Shuzhen Liu** | Support | Lead: `simulator.py`, test suite, mock-mode restoration, medication schedule logic, documentation | Lead: documentation & the first draft of the final report; report: Sections 1, 2 and 8. | Lead: first-version slides & Technology section |
+| **Shuzhen Liu** | Support | Repo setup & scaffolding; `simulator.py`; full test suite; mock-mode restoration (dual mock/hardware support); medication scheduling logic | Lead: all documentation & first draft of the report; Sections 1, 2, 8 | Lead: first-version decks for all three presentations; Technology section |
 | **Angela Yunjie Feng** | Lead: enclosure design & build (drilling, soldering), sensor co-wiring (reed switch, camera, OLED), Pi environment setup (SD card flashing, SSH, venv, Git deployment) | Lead: display module rewrite (Luma library), sensor code updates, dependency fixes (`requirements.txt`), boot-stage logging, end-to-end integration for demo | Sections 3.1 & 3.5 | Live demo troubleshooting & hardware fault resolution |
 | **[Name 2]** | Support | Lead: `llm_engine.py`, vision intake verification, Ki:connect integration, scheduler/LLM refactor, `main.py` | Reasoning / AI section | AI explanation |
 | **[Name 3]** | Support | Lead: `scheduler.py`, `store.py`, `dashboard.py`, caregiver pipeline | Data & escalation section | Business / market |
