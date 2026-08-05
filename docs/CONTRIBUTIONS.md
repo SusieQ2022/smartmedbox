@@ -14,7 +14,7 @@
 | **Shuzhen Liu** | Support | Repo setup & scaffolding; `simulator.py`; full test suite; mock-mode restoration (dual mock/hardware support); medication scheduling logic | Lead: all documentation & first draft of the report; Sections 1, 2, 8 | Lead: first-version decks for all three presentations; Technology section |
 | **Angela Yunjie Feng** | Lead: enclosure design & build (drilling, soldering), sensor co-wiring (reed switch, camera, OLED), Pi environment setup (SD card flashing, SSH, venv, Git deployment) | Lead: display module rewrite (Luma library), sensor code updates, dependency fixes (`requirements.txt`), boot-stage logging, end-to-end integration for demo | Sections 3.1 & 3.5 | Live demo troubleshooting & hardware fault resolution |
 | **Maheen Muhammad Sohail** | Hardware construction and integration: Built and assembled the SmartMedBox prototype using the Raspberry Pi Zero W, reed switch, camera, speaker and amplifier, OLED display, breadboard, enclosure, and associated wiring. Tested the physical connections and supported troubleshooting of the camera, GPIO components, audio output, power, and network connectivity. | Deployment and end-to-end integration: Prepared and configured the microSD card and Raspberry Pi environment, deployed and synchronised the Git repository, installed the required dependencies, and launched the application and dashboard services. Integrated and tested the complete workflow from compartment opening and timed image capture to multimodal AI verification, voice feedback, SQLite logging, and caregiver-dashboard updates. The contribution focused on deployment, configuration, troubleshooting, and system integration rather than primary development of the core software modules. | Technical report authorship: Authored Sections 3.2 Architecture, 3.3 Technology Stack and Third-Party Tools, and 3.4 Key Challenges and How We Solved Them. Added and formatted the architecture figure, dashboard screenshot, hardware photograph, tables, captions, and prompt appendix references. Also contributed to shortening, proofreading, formatting, consistency checking, and final report revisions. | Presentation development and live demonstration: Developed and refined the Value Proposition, Customer Segments, Channels, Customer Relationships, Key Challenges and Limitations, Conclusion, and Next Steps sections. Improved slide structure and visual consistency, prepared speaking scripts and demonstration material, and presented the working SmartMedBox and caregiver dashboard during the final live demonstration. |
-| **[Name 3]** | Support | Lead: `scheduler.py`, `store.py`, `dashboard.py`, caregiver pipeline | Data & escalation section | Business / market |
+| **[Phuong Khanh Pham]** | Prototype Troubleshooting | Lead: developed `llm_engine.py` and owned prompt engineering, refactor `scheduler.py`, `sensors.py`, `main.py` |  Business Model & Go-to-Market, Opportunities & Risks | Supported the live demo 
 | **[Name 4]** | Enclosure | Integration & testing support | Lead: business model | Presentation lead |
 
 ## Detailed deliverables
@@ -73,13 +73,13 @@
 - Refactored fall-back logic when LLM is not available.
 - Designed the two-flow architecture, separating: reminder / escalation logic (due, remind, alert) and vision confirmation logic, ensured clean code design.
 - Owned prompt engineering process, including Reminder-Generation Prompt and Visual-Verification Prompt, structured output data in JSON.
-- Integrated `scheduler.py` and `vision.py` into llm_engine
+- Integrated `scheduler.py`, `camera.py`,`sensors.py`, `llm_engine.py` into `main.py`
 - Built integration test for LLM_engine and camera vision, debugged while running the prototype in real mode.
 - Refactored `sensors.py` to align with real hardware components, replaced weight sensor logic with reed switch logic, migrated mock data to `scheduler.py` to isolate the sensor logic.
 - Developed all processing methods and refactored run() in `main.py`.
 - Identified key challenges and how to solve them.
 - Conducted competitor analysis on pricing models, supported pricing and revenue model based on BOM.
-- Authored 5 and 7 for final report.
+- Authored Business Model & Go-to-Market and Opportunities & Risks for final report.
   
 ### [Waqar Khowaja] — Caregiver data, scheduling safety, Business Model (Market Sizing, Positioning,  Financial Planning)
 - Designed and implemented the original `scheduler.py`: fixed medication
