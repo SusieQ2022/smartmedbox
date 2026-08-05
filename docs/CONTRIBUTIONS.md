@@ -13,7 +13,7 @@
 |--------|----------|------|--------|--------------|
 | **Shuzhen Liu** | Support | Repo setup & scaffolding; `simulator.py`; full test suite; mock-mode restoration (dual mock/hardware support); medication scheduling logic | Lead: all documentation & first draft of the report; Sections 1, 2, 8 | Lead: first-version decks for all three presentations; Technology section |
 | **Angela Yunjie Feng** | Lead: enclosure design & build (drilling, soldering), sensor co-wiring (reed switch, camera, OLED), Pi environment setup (SD card flashing, SSH, venv, Git deployment) | Lead: display module rewrite (Luma library), sensor code updates, dependency fixes (`requirements.txt`), boot-stage logging, end-to-end integration for demo | Sections 3.1 & 3.5 | Live demo troubleshooting & hardware fault resolution |
-| **[Name 2]** | Support | Lead: `llm_engine.py`, vision intake verification, Ki:connect integration, scheduler/LLM refactor, `main.py` | Reasoning / AI section | AI explanation |
+| **Maheen Muhammad Sohail** | Hardware construction and integration: Built and assembled the SmartMedBox prototype using the Raspberry Pi Zero W, reed switch, camera, speaker and amplifier, OLED display, breadboard, enclosure, and associated wiring. Tested the physical connections and supported troubleshooting of the camera, GPIO components, audio output, power, and network connectivity. | Deployment and end-to-end integration: Prepared and configured the microSD card and Raspberry Pi environment, deployed and synchronised the Git repository, installed the required dependencies, and launched the application and dashboard services. Integrated and tested the complete workflow from compartment opening and timed image capture to multimodal AI verification, voice feedback, SQLite logging, and caregiver-dashboard updates. The contribution focused on deployment, configuration, troubleshooting, and system integration rather than primary development of the core software modules. | Technical report authorship: Authored Sections 3.2 Architecture, 3.3 Technology Stack and Third-Party Tools, and 3.4 Key Challenges and How We Solved Them. Added and formatted the architecture figure, dashboard screenshot, hardware photograph, tables, captions, and prompt appendix references. Also contributed to shortening, proofreading, formatting, consistency checking, and final report revisions. | Presentation development and live demonstration: Developed and refined the Value Proposition, Customer Segments, Channels, Customer Relationships, Key Challenges and Limitations, Conclusion, and Next Steps sections. Improved slide structure and visual consistency, prepared speaking scripts and demonstration material, and presented the working SmartMedBox and caregiver dashboard during the final live demonstration. |
 | **[Name 3]** | Support | Lead: `scheduler.py`, `store.py`, `dashboard.py`, caregiver pipeline | Data & escalation section | Business / market |
 | **[Name 4]** | Enclosure | Integration & testing support | Lead: business model | Presentation lead |
 
@@ -45,10 +45,13 @@
 - Final Report: authored the first draft; Sections 1, 2 and 8.
 - Hardware: support.
 
-### [Name 1] — Hardware
-- Wired and tested all physical components: reed switch (GPIO 17), Pi Camera v2, speaker + PAM8403 amplifier, OLED display.
-- Validated hardware integration end-to-end on the Raspberry Pi.
-- Assembled components into the pill-box enclosure.
+### Maheen Muhammad Sohail - Detailed Contribution
+- Hardware and prototype integration: Built and tested the SmartMedBox hardware using the Raspberry Pi Zero W, reed switch, camera, speaker and amplifier, OLED display, breadboard, enclosure, and wiring.
+- Raspberry Pi and Git deployment: Prepared the microSD card, configured the Raspberry Pi environment, installed the required dependencies, and deployed and synchronised the team’s Git repository on the device.
+- Dashboard and system integration: Brought the complete sensor-to-dashboard workflow into operation, including image capture, multimodal AI verification, voice feedback, SQLite event logging, and caregiver-dashboard updates.
+- Testing, troubleshooting, and demonstration: Tested confirmed and unverified intake scenarios, resolved hardware, camera, audio, database, network, and dashboard-access issues, and prepared the working prototype for the final live demonstration.
+- Technical report: Authored Sections 3.2 Architecture, 3.3 Technology Stack and Third-Party Tools, and 3.4 Key Challenges and How We Solved Them. Also contributed figures, tables, captions, prompt appendices, formatting, proofreading, and chapter shortening.
+- Presentation and project showcase: Developed and refined the value proposition, customer segments, channels, customer relationships, challenges, limitations, conclusion, and future roadmap. Prepared speaking scripts, demonstration material, videos, dashboard recordings, photographs, and social-media content.
 
 ### Angela Yunjie Feng — Hardware
 - Co-wired all sensor components to the Raspberry Pi Zero 2 W, including the reed switch (GPIO 17), camera module, and OLED display
