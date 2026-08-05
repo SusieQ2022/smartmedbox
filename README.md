@@ -185,10 +185,10 @@ This project is graded individually. Every member contributed across hardware, c
 | Member | Primary Work Package |
 |--------|---------------------|
 | Shuzhen Liu | Repository setup and project scaffolding; demo simulator (deterministic mode, rewritten after refactor); full test suite (fixed fallback tests, a suite-breaking syntax error, and cleanup after refactor); original medication scheduling logic; restored mock mode after hardware integration broke it, converting the codebase to support both mock and hardware modes; all project documentation; first-version decks for all three presentations and the first draft of the final report; report: Sections 1, 2 and 8. |
-| [Name 2] | LLM engine, vision verification & prompt engineering |
-| [Name 3] | Scheduler, SQLite store & caregiver dashboard |
-| [Name 4] | Demo simulator, tests & documentation |
-| [Name 5] | Integration, business model & presentation |
+| Maheen Muhammad Sohail | Built and integrated the SmartMedBox prototype, including the Raspberry Pi Zero W, sensors, camera, voice components, display, enclosure, and wiring. Configured the microSD card and Raspberry Pi environment, deployed the Git repository, and tested the complete workflow from sensor activation and AI verification to SQLite logging and caregiver-dashboard updates. Authored Sections 3.2–3.4 of the report and contributed to the presentation, demonstration preparation, figures, formatting, and proofreading. |
+| Angela Yunjie Feng | Sole physical enclosure design and assembly (drilling, soldering), sensor co-wiring (reed switch, camera, OLED display), Pi environment setup (SD card flashing, SSH, venv configuration, Git deployment), display module rewrite (Luma library integration), dependency and integration fixes across the codebase, end-to-end prototype bring-up and live demo troubleshooting; report: Sections 3.1 and 3.5. |
+| Phuong Khanh Pham | Integrated LLM using KI Connect and developed llm_engine, configured .env file, designed the two-flow architecture (reminder and escalation - verification), developed reed switch logic, refactored scheduler, align sensors code with hardware, integrated mock schedule data, developed vision verification; Authored section 5 and 7; spokesperson of the team |
+| Waqar Khowaja | Built the SQLite adherence store and caregiver dashboard, aligned system event logging, and added integration tests. Business integration end; Authored Section 4 and 8; market and competition analysis, financial planning |
 
 *(Replace placeholders with actual names.)*
 
