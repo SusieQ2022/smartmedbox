@@ -10,7 +10,7 @@
 [![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-Zero%202%20W-C51A4A.svg)](https://www.raspberrypi.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**Emerging Electronic Business · Wirtschaftsinformatik M.Sc. · University of Cologne**
+**Emerging Electronic Business · M.Sc. · University of Cologne**
 
 </div>
 
@@ -189,8 +189,6 @@ This project is graded individually. Every member contributed across hardware, c
 | Angela Yunjie Feng | Sole physical enclosure design and assembly (drilling, soldering), sensor co-wiring (reed switch, camera, OLED display), Pi environment setup (SD card flashing, SSH, venv configuration, Git deployment), display module rewrite (Luma library integration), dependency and integration fixes across the codebase, end-to-end prototype bring-up and live demo troubleshooting; report: Sections 3.1 and 3.5. |
 | Phuong Khanh Pham | Integrated LLM using KI Connect and developed llm_engine, configured .env file, designed the two-flow architecture (reminder and escalation - verification), developed reed switch logic, refactored scheduler, align sensors code with hardware, integrated mock schedule data, developed vision verification; Authored section 5 and 7; spokesperson of the team |
 | Waqar Khowaja | Built the SQLite adherence store and caregiver dashboard, aligned system event logging, and added integration tests. Business integration end; Authored Section 4 and 8; market and competition analysis, financial planning |
-
-*(Replace placeholders with actual names.)*
 
 ---
 
