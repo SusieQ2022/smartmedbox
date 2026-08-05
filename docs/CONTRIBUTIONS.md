@@ -12,7 +12,7 @@
 | Member | GitHub | Primary focus |
 |--------|--------|---------------|
 | Shuzhen Liu | [@SusieQ2022] | Demo simulator, tests, documentation |
-| [Name 1] | [@handle] | Hardware assembly & sensor integration |
+| Angela Yunjie Feng | [@angfe] | Hardware assembly & sensor integration |
 | [Name 2] | [@Ppkhanh] | LLM engine, vision verification, prompt engineering |
 | [Name 3] | [@Waqar] | Scheduler, SQLite store, caregiver dashboard |
 | [Name 5] | [@handle] | Integration, business model, presentation |
@@ -24,7 +24,7 @@
 | Member | Hardware | Code | Report | Presentation |
 |--------|----------|------|--------|--------------|
 | **Shuzhen Liu** | Support | Lead: `simulator.py`, test suite, mock-mode restoration, medication schedule logic, documentation | Lead: documentation & report | Lead: first-version slides & Technology section |
-| **[Name 1]** | Lead: wiring speaker, camera, display & reed switch; enclosure assembly | Hardware testing & GPIO validation | Hardware section | Demo operation |
+| **Angela Yunjie Feng** | Lead: enclosure design & build (drilling, soldering), sensor co-wiring (reed switch, camera, OLED), Pi environment setup (SD card flashing, SSH, venv, Git deployment) | Lead: display module rewrite (Luma library), sensor code updates, dependency fixes (`requirements.txt`), boot-stage logging, end-to-end integration for demo | Sections 3.1 & 3.5 | Live demo troubleshooting & hardware fault resolution |
 | **[Name 2]** | Support | Lead: `llm_engine.py`, vision intake verification, Ki:connect integration, scheduler/LLM refactor, `main.py` | Reasoning / AI section | AI explanation |
 | **[Name 3]** | Support | Lead: `scheduler.py`, `store.py`, `dashboard.py`, caregiver pipeline | Data & escalation section | Business / market |
 | **[Name 4]** | Enclosure | Integration & testing support | Lead: business model | Presentation lead |
@@ -60,11 +60,20 @@
 - Validated hardware integration end-to-end on the Raspberry Pi.
 - Assembled components into the pill-box enclosure.
 
-### [Name 2] — AI & reasoning
-- Integrated the university's Ki:connect API (Mistral) as the reasoning backend.
-- Built `verify_intake()` — multimodal vision verification of medication intake.
-- Refactored the engine so the scheduler owns escalation and the LLM only phrases messages.
-- Restructured `main.py` around the two-line architecture; added the pre-capture prompt + delay.
+### Angela Yunjie Feng — Hardware
+- Co-wired all sensor components to the Raspberry Pi Zero 2 W, including the reed switch (GPIO 17), camera module, and OLED display
+- Solely designed and assembled the physical enclosure: selected a clear box to protect the camera and screen inside, drilled mounting holes for the speaker and microphone, and soldered the reed switch into position
+- Assembled all hardware components into the final integrated prototype
+- Flashed the microSD card and established the SSH connection via terminal
+- Created the Python virtual environment and ensured all packages from requirements.txt installed correctly within the venv
+- Connected the device to the team's Git repository
+- Rewrote the display module by integrating the Luma screen library
+- Updated sensor connection code for hardware compatibility
+- Resolved dependency issues across the codebase, including adding the required packages to requirements.txt
+- Added console-level loading indicators for each boot stage to support systematic testing
+- Carried out the end-to-end integration that brought the full prototype to a runnable state ahead of the demonstration
+- Authored Section 3.1 (Product Concept and Application Scenarios) and Section 3.5 (Defensibility)
+- Diagnosed and resolved hardware failures during the live demonstration by verifying physical connections and restarting the system to restore functionality
 
 ### [Name 4] — Integration & business
 - Business Model Canvas
