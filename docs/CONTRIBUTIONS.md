@@ -68,10 +68,19 @@
 - Authored Section 3.1 (Product Concept and Application Scenarios) and Section 3.5 (Defensibility)
 - Diagnosed and resolved hardware failures during the live demonstration by verifying physical connections and restarting the system to restore functionality
 
-### [Name 4] — Integration & business
-- Business Model Canvas
-- Presentation coordination and delivery.
-
+### [Phuong Khanh Pham] — LLM, Camera Vision and Documentation
+- Integrated `llm_engine.py` into the architecture using KI:connect, set up the .env file with necessary dependencies.
+- Refactored fall-back logic when LLM is not available.
+- Designed the two-flow architecture, separating: reminder / escalation logic (due, remind, alert) and vision confirmation logic, ensured clean code design.
+- Owned prompt engineering process, including Reminder-Generation Prompt and Visual-Verification Prompt, structured output data in JSON.
+- Integrated `scheduler.py` and `vision.py` into llm_engine
+- Built integration test for LLM_engine and camera vision, debugged while running the prototype in real mode.
+- Refactored `sensors.py` to align with real hardware components, replaced weight sensor logic with reed switch logic, migrated mock data to `scheduler.py` to isolate the sensor logic.
+- Developed all processing methods and refactored run() in `main.py`.
+- Identified key challenges and how to solve them.
+- Conducted competitor analysis on pricing models, supported pricing and revenue model based on BOM.
+- Authored 5 and 7 for final report.
+  
 ### [Waqar Khowaja] — Caregiver data, scheduling safety, Business Model (Market Sizing, Positioning,  Financial Planning)
 - Designed and implemented the original `scheduler.py`: fixed medication
   scheduling, overdue calculation and deterministic escalation from `due` to
