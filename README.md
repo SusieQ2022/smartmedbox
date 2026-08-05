@@ -184,7 +184,7 @@ This project is graded individually. Every member contributed across hardware, c
 
 | Member | Primary Work Package |
 |--------|---------------------|
-| Shuzhen Liu | Demo simulator + tests, mock-mode restoration and test cleanup,     medication scheduling logic, full project documentation, first-draft presentations; hardware: support. |
+| Shuzhen Liu | Repository setup and project scaffolding; demo simulator (deterministic mode, rewritten after refactor); full test suite (fixed fallback tests, a suite-breaking syntax error, and cleanup after refactor); original medication scheduling logic; restored mock mode after hardware integration broke it, converting the codebase to support both mock and hardware modes; all project documentation; first-version decks for all three presentations and the first draft of the final report; report: Sections 1, 2 and 8. |
 | [Name 2] | LLM engine, vision verification & prompt engineering |
 | [Name 3] | Scheduler, SQLite store & caregiver dashboard |
 | [Name 4] | Demo simulator, tests & documentation |
